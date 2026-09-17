@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
 
 from data_pipeline.pipeline import process_document
+from data_pipeline.store import delete_by_doc
 from db.models import Document
 from db.session import get_db
 
@@ -70,10 +71,15 @@ async def list_documents(db: OrmSession = Depends(get_db)):
 
 @router.delete("/documents/{doc_id}")
 async def delete_document(doc_id: int, db: OrmSession = Depends(get_db)):
-    """删除文档元数据（ChromaDB 向量删除为阶段 3 增强项）。"""
+    """删除文档：MySQL 元数据 + ChromaDB 向量块 + 本地文件。"""
     doc = db.get(Document, doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail=f"文档 {doc_id} 不存在")
+    # 先删向量库与本地文件，再删元数据
+    delete_by_doc(doc.filename)
+    uploaded = Path(doc.file_path)
+    if uploaded.exists():
+        uploaded.unlink(missing_ok=True)
     db.delete(doc)
     db.commit()
     return {"deleted": doc_id}

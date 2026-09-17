@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
+from core.exceptions import register_exception_handlers
 from api import chat, documents, graph, sessions
 from db.init_db import init_db
 
@@ -22,11 +23,20 @@ def _warmup_embedder() -> None:
     embed_texts(["预热"])
 
 
+def _warmup_reranker() -> None:
+    """预加载 bge-reranker 精排模型（约 1.1GB，后台加载）。"""
+    from data_pipeline.rerank import get_reranker
+
+    get_reranker()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """启动时自动建库建表，并后台预热向量模型。"""
+    """启动时自动建库建表，并后台预热向量模型与精排模型。"""
     init_db()
-    asyncio.get_running_loop().create_task(anyio.to_thread.run_sync(_warmup_embedder))
+    loop = asyncio.get_running_loop()
+    loop.create_task(anyio.to_thread.run_sync(_warmup_embedder))
+    loop.create_task(anyio.to_thread.run_sync(_warmup_reranker))
     yield
 
 
@@ -45,6 +55,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 统一异常处理
+register_exception_handlers(app)
 
 # 注册路由
 app.include_router(chat.router, prefix="/api", tags=["chat"])

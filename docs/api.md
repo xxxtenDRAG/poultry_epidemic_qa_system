@@ -28,7 +28,7 @@
   - 流程：保存文件 → 解析 → 分块 → bge 向量化 → ChromaDB 入库 → 元数据写 MySQL
   - 返回：`{ "id", "filename", "file_type", "chunk_count", "status", "created_at" }`
 - `GET /api/documents` — 文档列表（最新在前）
-- `DELETE /api/documents/{id}` — 删除元数据（ChromaDB 向量删除为阶段 3 增强项）
+- `DELETE /api/documents/{id}` — 删除文档：MySQL 元数据 + ChromaDB 向量块 + 本地文件
 
 ## 5. 知识图谱
 

@@ -1,12 +1,13 @@
-"""LangGraph 最小工作流：Query 理解 → 检索 → 生成 → 溯源（阶段 1，无评估循环）。
+"""LangGraph 工作流：Query 理解（改写）→ 检索（多路召回+精排）→ 生成 → 溯源。
 
 运行：python -m scripts.agent_chat "你的问题"
 """
+import re
+
 from openai import OpenAI
 
 from core.config import settings
-from data_pipeline.embed import embed_texts
-from data_pipeline.store import search as vector_search
+from data_pipeline.retriever import retrieve_multi
 from .state import AgentState
 
 _client: OpenAI | None = None
@@ -20,34 +21,49 @@ def get_client() -> OpenAI:
     return _client
 
 
+_REWRITE_PROMPT = (
+    "你是一名鹅养殖疫病问答检索助手。请把下面这个问题改写成 3 个更利于检索的独立搜索查询，"
+    "每个查询一行，不要编号，不要多余文字。\n问题：{q}"
+)
+
+
+def rewrite_queries(question: str) -> list[str]:
+    """用 DeepSeek 把用户问题改写为 3 个检索 Query（多路召回）。
+
+    失败时降级为原文单路（项目约定：复杂模块必须可关闭）。
+    """
+    try:
+        resp = get_client().chat.completions.create(
+            model=settings.DEEPSEEK_MODEL,
+            messages=[{"role": "user", "content": _REWRITE_PROMPT.format(q=question)}],
+            temperature=0.7,
+            max_tokens=200,
+        )
+        text = resp.choices[0].message.content or ""
+        lines = [re.sub(r"^\d+[\.、)]\s*", "", ln).strip() for ln in text.splitlines()]
+        queries = [ln for ln in lines if ln]
+        merged: list[str] = []
+        for q in [question, *queries]:
+            if q not in merged and len(merged) < 3:
+                merged.append(q)
+        return merged
+    except Exception:  # noqa: BLE001  —— 降级
+        return [question]
+
+
 # ---- 节点 1：Query 理解 Agent ----
 def query_understand(state: AgentState) -> AgentState:
-    """意图识别 + Query 改写。
-
-    阶段 1：原文直通（单路召回）。
-    阶段 2：增加改写生成多路 Query（多 Query 召回）。
-    """
-    state["rewritten_queries"] = [state["query"]]
+    """意图识别 + Query 改写（多路召回）。"""
+    state["rewritten_queries"] = rewrite_queries(state["query"])
     return state
 
 
 # ---- 节点 2：检索 Agent ----
 def retrieve(state: AgentState) -> AgentState:
-    """向量检索（双通道中的向量通道；图谱通道阶段 3 接入）。"""
-    results = []
-    for q in state["rewritten_queries"]:
-        emb = embed_texts([q])[0]
-        results.extend(vector_search(emb, top_k=settings.TOP_K))
-
-    # 多路召回按 文档+块号 去重，再取 Top-K
-    seen = set()
-    dedup: list[dict] = []
-    for r in results:
-        key = (r["metadata"]["doc"], r["metadata"]["index"])
-        if key not in seen:
-            seen.add(key)
-            dedup.append(r)
-    state["retrieval_results"] = dedup[: settings.TOP_K]
+    """多 Query 向量召回 + bge-reranker 精排（图谱通道阶段 3 接入）。"""
+    state["retrieval_results"] = retrieve_multi(
+        state["rewritten_queries"], top_k=settings.TOP_K
+    )
     return state
 
 

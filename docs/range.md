@@ -5,7 +5,8 @@
 ## 进度
 
 - 阶段 0/1 已完成（M1-M5 验收通过）：数据管线、LangGraph 最小图、MySQL 三表 + 接口、前端 4 页面、24 条测试样本。
-- 知识库现状：3 份文档（`datasets/knowledge/`，共 8 块），后续补充真实 PDF 后执行 `python -m scripts.ingest`。
+- 阶段 2 进行中：M1 检索评估 + bge-reranker 精排 ✅（Hit@1 66.7%→79.2%，见 `eval_report.md`）；M2 Query 改写多路召回 ✅；M3 统一异常处理 + 文档删除联动清理 ✅。剩余：真实 PDF 知识库扩充后复测。
+- 知识库现状：3 份示例文档，共 7 块（`datasets/knowledge/`）。
 
 ## 做（P0 + P1）
 

@@ -29,11 +29,25 @@ def add_documents(
     col.add(ids=ids, documents=chunks, embeddings=embeddings, metadatas=metadatas)
 
 
-def search(query_embedding: list[float], top_k: int | None = None) -> list[dict]:
-    """向量检索，返回 Top-K 结果 [{id, document, metadata, distance}]。"""
+def search(
+    query_embedding: list[float],
+    top_k: int | None = None,
+    query: str | None = None,
+    rerank: bool = False,
+    rerank_pool: int = 20,
+) -> list[dict]:
+    """向量检索，返回 Top-K 结果 [{id, document, metadata, distance}]。
+
+    rerank=True 时先用更大池子（rerank_pool）召回，再用 bge-reranker 精排取 Top-K。
+    """
     col = get_collection()
     top_k = top_k or settings.TOP_K
-    res = col.query(query_embeddings=[query_embedding], n_results=top_k, include=["documents", "metadatas", "distances"])
+    n_results = max(top_k, rerank_pool) if rerank else top_k
+    res = col.query(
+        query_embeddings=[query_embedding],
+        n_results=n_results,
+        include=["documents", "metadatas", "distances"],
+    )
     results: list[dict] = []
     for i, doc_id in enumerate(res["ids"][0]):
         results.append(
@@ -44,8 +58,22 @@ def search(query_embedding: list[float], top_k: int | None = None) -> list[dict]
                 "distance": res["distances"][0][i],
             }
         )
+    if rerank and query:
+        from data_pipeline.rerank import rerank as _rerank
+
+        results = _rerank(query, results)[:top_k]
     return results
 
 
 def count() -> int:
     return get_collection().count()
+
+
+def delete_by_doc(doc_name: str) -> int:
+    """删除指定文档的全部向量块，返回删除数量。"""
+    col = get_collection()
+    res = col.get(where={"doc": doc_name}, include=[])
+    ids = res["ids"]
+    if ids:
+        col.delete(ids=ids)
+    return len(ids)
