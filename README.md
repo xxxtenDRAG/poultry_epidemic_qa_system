@@ -44,6 +44,8 @@ poultry_epidemic_qa_system/
 
 ## 快速启动（开发环境）
 
+> **新成员请先阅读完整使用手册：[docs/user_guide.md](docs/user_guide.md)**（拉取仓库 → 配置 → 启动 → 导入知识库 → 使用 → 排查）
+
 ### 后端
 
 ```bash
