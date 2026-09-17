@@ -1,11 +1,27 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import * as echarts from 'echarts'
 import { api } from '../api'
 
 const entity = ref('')
 const loading = ref(false)
-const result = ref(null)
 const queried = ref(false)
+const result = ref(null)
+const overview = ref(null)
+const chartRef = ref(null)
+let chart = null
+
+// 实体类型 → 颜色映射（用于前端图例）
+const typeColors = {
+  疾病: '#f56c6c', 病原: '#409eff', 症状: '#e6a23c', 药物: '#67c23a',
+  疫苗: '#909399', 宿主: '#9c27b0', 传播途径: '#00bcd4', 防控: '#ff9800'
+}
+
+async function loadOverview() {
+  try {
+    overview.value = await api.graph.overview()
+  } catch (_) { /* 忽略：图谱不存在时前端不报错 */ }
+}
 
 async function query() {
   const e = entity.value.trim()
@@ -14,49 +30,121 @@ async function query() {
   queried.value = true
   try {
     result.value = await api.graph.query(e)
+    await nextTick()
+    render()
   } finally {
     loading.value = false
   }
 }
+
+function render() {
+  if (!chartRef.value) return
+  if (!chart) chart = echarts.init(chartRef.value)
+  const data = result.value
+  const nodes = (data?.nodes || []).map((n, i) => ({
+    id: n.id,
+    name: n.id,
+    value: n.id,
+    symbolSize: 40,
+    category: n.type || '未分类',
+    x: undefined, y: undefined,
+    ...n,          // 保留 type/community，便于点选信息
+    _idx: i,
+    itemStyle: { color: typeColors[n.type] || '#909399' }
+  }))
+  const categories = [...new Set(nodes.map((n) => n.category))].map((c) => ({ name: c }))
+  const edges = (data?.edges || []).map((e) => ({
+    source: e.source,
+    target: e.target,
+    label: { show: true, formatter: e.relation, fontSize: 13 },
+    lineStyle: { color: '#b0b6c0', width: 1.5 }
+  }))
+
+  chart.setOption({
+    tooltip: {
+      formatter: (p) => (p.dataType === 'node' ? `${p.data.name}<br/>类型：${p.data.type ?? ''}<br/>社区：${p.data.community ?? '-'}` : `${p.data.source} —${p.data.label?.formatter ?? p.data.value}— ${p.data.target}`)
+    },
+    legend: categories.length ? { data: categories.map((c) => c.name), bottom: 4 } : undefined,
+    series: [{
+      type: 'graph',
+      layout: 'force',
+      data: nodes,
+      edges,
+      categories,
+      draggable: true,
+      roam: true,
+      label: { show: true, position: 'bottom', fontSize: 15, fontFamily: 'Microsoft YaHei' },
+      force: { repulsion: 900, edgeLength: 130 },
+      emphasis: { focus: 'adjacency', lineStyle: { width: 4 } },
+      lineStyle: { curveness: 0.12 }
+    }]
+  }, true)
+
+  // 点选节点二次查询
+  chart.off('click')
+  chart.on('click', (p) => {
+    if (p.dataType === 'node' && p.data?.name) {
+      entity.value = p.data.name
+      query()
+    }
+  })
+  window.addEventListener('resize', resizeListener)
+}
+
+function resizeListener() {
+  chart?.resize()
+}
+
+onMounted(() => { loadOverview() })
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeListener)
+  chart?.dispose()
+  chart = null
+})
 </script>
 
 <template>
   <div class="graph-page">
-    <el-card shadow="never">
-      <template #header>知识图谱查询（阶段 3 接入图谱检索）</template>
-      <div class="query-bar">
-        <el-input v-model="entity" placeholder="输入实体，如：小鹅瘟、鸭瘟、大肠杆菌" @keyup.enter="query" />
-        <el-button type="primary" :loading="loading" @click="query">查询</el-button>
-      </div>
+    <el-row :gutter="16">
+      <el-col :span="18">
+        <el-card shadow="never">
+          <template #header>知识图谱查询</template>
+          <div class="query-bar">
+            <el-input v-model="entity" placeholder="输入实体，如：小鹅瘟、鸭瘟、禽流感" @keyup.enter="query" />
+            <el-button type="primary" :loading="loading" @click="query">查询</el-button>
+          </div>
 
-      <el-empty
-        v-if="!queried"
-        description="输入实体开始查询，将展示实体与关联关系"
-        :image-size="100"
-      />
-      <template v-else>
-        <el-result v-if="!result?.edges?.length" icon="info" title="未找到关联关系">
-          <template #sub-title>图谱检索尚未接入（计划阶段 3），当前返回空结果。</template>
-        </el-result>
-        <div v-else>
-          <el-tag size="large" type="success" effect="dark">{{ result.entity }}</el-tag>
-          <div class="edge-list">
-            <div v-for="(e, i) in result.edges" :key="i" class="edge-item">
-              <el-tag>{{ e.source }}</el-tag>
-              <span class="edge-rel">—— {{ e.relation }} ——</span>
-              <el-tag type="info">{{ e.target }}</el-tag>
+          <el-empty v-if="!queried" description="输入实体开始查询，将展示实体与其关联关系" />
+          <el-empty v-else-if="!result?.nodes?.length" description="知识库未命中实体，请换个实体试试" />
+          <div v-else ref="chartRef" class="chart" />
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="never">
+          <template #header>图谱概览</template>
+          <el-descriptions v-if="overview" :column="1" size="small">
+            <el-descriptions-item label="节点">{{ overview.node_count }}</el-descriptions-item>
+            <el-descriptions-item label="关系边">{{ overview.edge_count }}</el-descriptions-item>
+            <el-descriptions-item label="社区">{{ overview.community_count }}</el-descriptions-item>
+          </el-descriptions>
+          <el-empty v-else description="尚未构建图谱（运行 build_graph）" :image-size="60" />
+          <el-divider />
+          <div class="legend">
+            <div v-for="(c, name) in typeColors" :key="name" class="legend-item">
+              <span class="dot" :style="{ background: c }" />{{ name }}
             </div>
           </div>
-        </div>
-      </template>
-    </el-card>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <style scoped>
-.query-bar { display: flex; gap: 12px; margin-bottom: 20px; }
+.query-bar { display: flex; gap: 12px; margin-bottom: 16px; }
 .query-bar .el-input { max-width: 420px; }
-.edge-list { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
-.edge-item { display: flex; align-items: center; gap: 12px; }
-.edge-rel { color: #909399; font-size: 13px; }
+.chart { width: 100%; height: 68vh; }
+.legend { display: flex; flex-direction: column; gap: 8px; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 </style>

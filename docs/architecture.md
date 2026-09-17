@@ -21,14 +21,15 @@ API 层（FastAPI）：/api/chat/stream  /api/documents  /api/graph
 ## 2. 核心管线
 
 - **离线管线**：原始文档 → 解析 → 清洗 → 分块 → 向量化 → 入库 ChromaDB
-- **在线管线**：User Query → Query 理解 → 向量检索 → Reranker →（并行）知识图谱检索 → 融合排序 → 构造 Prompt → LLM 生成 → SSE 流式返回
+- **图谱管线（阶段 3）**：ChromaDB 全部块 → DeepSeek 抽三元组（每块 ≤5 条，解析失败跳过）→ NetworkX 构图 → Louvain 社区检测 → `data/knowledge_graph.json`（`python -m scripts.build_graph`）
+- **在线管线**：User Query → Query 理解（改写多路）→ 向量检索 → Reranker ⟂ 知识图谱子图召回（实体命中时）→ 融合构造 Prompt → LLM 生成 → 评估循环（相关性/充分度，≤3 次，可关闭）→ SSE 流式返回
 
 ## 3. 功能范围（P0 / P1 / P2）
 
 | 等级 | 功能 | 状态 |
 |------|------|------|
-| P0 必做 | 文档上传解析分块入库；向量 RAG 检索；SSE 流式问答；会话管理；基础前端页面；Docker 本地部署 | 待开发 |
-| P1 选做 | 简化 Agent 评估重试循环；NetworkX 知识图谱；简单图谱可视化 | 待开发 |
+| P0 必做 | 文档上传解析分块入库；向量 RAG 检索；SSE 流式问答；会话管理；基础前端页面；Docker 本地部署 | 阶段 1-3 完成（Docker 阶段 4） |
+| P1 选做 | Agent 评估重试循环；NetworkX 知识图谱；图谱可视化（ECharts） | 阶段 3 完成 |
 | P2 仅文档 | 登录账号、后台管理、动态知识库、完整监控、Neo4j 迁移 | 不编码 |
 
 ## 4. TODO（评审补充项）

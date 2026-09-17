@@ -30,13 +30,21 @@
 - `GET /api/documents` — 文档列表（最新在前）
 - `DELETE /api/documents/{id}` — 删除文档：MySQL 元数据 + ChromaDB 向量块 + 本地文件
 
-## 5. 知识图谱
+## 5. 知识图谱 ✅ 已接入真实图谱检索（阶段 3）
 
-- `GET /api/graph/query?entity=xxx` → `{ "entity", "edges": [...] }`
-  - 当前状态：mock；阶段 3 接入 NetworkX
+- `GET /api/graph/query?entity=xxx` → `{ "entity", "nodes": [{ "id", "type", "community" }], "edges": [{ "source", "target", "relation" }] }`
+  - 返回实体一跳子图；图谱文件缺失或未命中实体时 nodes/edges 为空（不报错）
+- `GET /api/graph/overview` → `{ "node_count", "edge_count", "community_count", "communities": [{ "id", "size" }] }`
+  - 图谱规模与社区统计（前端图谱页概览用）
 
-## 6. TODO
+## 6. 对话链路说明（阶段 3）
 
-- [ ] `/api/graph/query` 接入真实图谱检索（阶段 3）
-- [ ] 统一异常处理 + 错误响应格式（阶段 2）
+- 检索为双通道：向量召回（多 Query + bge-reranker 精排） + 知识图谱子图（实体命中时）
+- 图谱通道空 / 未命中实体 → 自动跳过，不影响主链路
+- 评估循环（`run()` 非流式链路）：生成后对 `relevance` / `sufficiency`（0-5）打分，
+  任一 < 3 且循环次数 < `EVAL_MAX_LOOPS` 时改写 Query 重检索；`EVAL_LOOP_ENABLED=false`
+  时跳过评估直接出答案（降级）。SSE 流式链路（`prepare`→`stream_generate`）不做循环。
+
+## 7. TODO
+
 - [ ] 流式对话的中途取消 / 断流重连（阶段 3）

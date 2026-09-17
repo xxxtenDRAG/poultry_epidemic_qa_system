@@ -9,6 +9,9 @@ class AgentState(TypedDict, total=False):
     query: str                     # 用户原始问题
     rewritten_queries: list[str]   # Query 理解 Agent 改写后的多路召回 Query
     retrieval_results: list[dict]  # 检索 Agent 的召回结果（向量 + 图谱）
+    graph_context: str             # 图谱子图上下文文本（阶段 3，可空）
     answer: str                    # 生成 Agent 的最终答案
     sources: list[dict]            # 溯源 Agent 标注的知识来源
-    loop_count: int                # 评估循环次数（≤ 3）
+    loop_count: int                # 评估循环次数（≤ EVAL_MAX_LOOPS）
+    eval_result: dict              # 评估 Agent 打分结果 {relevance, sufficiency}
+    passed: bool                   # 评估是否通过（达标或超限时为 True）

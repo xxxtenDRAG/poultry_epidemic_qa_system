@@ -101,9 +101,13 @@ FastAPI 应用唯一入口。职责：
 
 **放置规则**：与"文档处理"相关的代码都放这里，供 api/documents.py 和 agent/检索 Agent 调用。
 
-### 3.6 knowledge_graph/ —— 知识图谱（阶段 3）
+### 3.6 knowledge_graph/ —— 知识图谱（阶段 3 已实现）
 
-职责：LLM 抽三元组 → NetworkX 构图 → Louvain 社区检测 → 图谱检索。
+| 文件 | 作用 |
+|------|------|
+| `retriever.py` | 加载 `data/knowledge_graph.json` → 实体抽取 → 一跳子图召回；`query_entity` 供前端、`retrieve_graph` 供 Agent 双通道 |
+
+- 图谱构建脚本：`backend/scripts/build_graph.py`（LLM 抽三元组 → NetworkX → Louvain → 落盘）
 
 ### 3.7 db/ —— 数据库层
 

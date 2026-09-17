@@ -21,8 +21,8 @@
 ## 1. 拉取仓库
 
 ```powershell
-git clone https://gitee.com/cai-yeten/agent.git
-cd agent
+git clone https://gitee.com/cai-yeten/poultry_epidemic_qa_system.git
+cd poultry_epidemic_qa_system
 ```
 
 ## 2. 配置环境变量

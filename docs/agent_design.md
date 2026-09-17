@@ -28,25 +28,27 @@
 
 终止条件：三项达标 **OR** 循环次数 ≥ 3。
 
-## 已实现（阶段 1：M2 最小工作流）✅
+## 已实现（阶段 3）✅
 
 代码：`backend/agent/graph.py`，运行：`python -m scripts.agent_chat "问题"`
 
 ```
-START → query_understand（原文直通，单路召回）
-      → retrieve（bge 向量化 + ChromaDB 检索，多路去重）
-      → generate（检索结果构造 Prompt → DeepSeek 生成）
-      → trace_sources（标注 文档/块号/距离）
-      → END
+START → query_understand（改写多路）
+      → retrieve（向量多路召回 + bge-reranker 精排 ⟂ 图谱子图通道，空图自动降级）
+      → generate（向量 + 图谱上下文构造 Prompt → DeepSeek 生成）
+      → evaluate（relevance/sufficiency 打分 0-5）
+      → 达标 / EVAL_LOOP_ENABLED=false / loop_count ≥ EVAL_MAX_LOOPS → trace_sources → END
+      → 不达标 → retry（loop_count+1）→ query_understand（改写重检索，≤3 次）
 ```
 
-- 调用 DeepSeek：`openai` 客户端 + `base_url=https://api.deepseek.com`（OpenAI 兼容接口）
-- 无评估循环、无 Query 改写、无图谱通道（阶段 2/3 补齐）
+- 图谱通道：`knowledge_graph/retriever.py`（实体抽取 → 一跳子图文本）
+- 评估循环：`EVAL_LOOP_ENABLED`（默认 true）/ `EVAL_MAX_LOOPS`（默认 3），关闭后跳过评估直接出答案
+- SSE 流式链路（`prepare`→`stream_generate`）携带图谱上下文但不做循环
 
 ## TODO
 
 - [x] ~~LangGraph StateGraph 最简样例（阶段 1）~~ → 已实现
-- [ ] Query 改写 + 多 Query 召回（阶段 2）
-- [ ] 接入图谱通道（阶段 3）
-- [ ] 评估 Agent + 循环控制（阶段 3）
+- [x] ~~Query 改写 + 多 Query 召回（阶段 2）~~ → 已实现
+- [x] ~~接入图谱通道（阶段 3）~~ → 已实现
+- [x] ~~评估 Agent + 循环控制（阶段 3）~~ → 已实现
 - [ ] 各 Agent 输入输出精确定义

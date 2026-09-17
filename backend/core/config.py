@@ -52,6 +52,20 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 50
     TOP_K: int = 5
 
+    # ---- 阶段 3：知识图谱 + 评估循环 ----
+    # 图谱数据文件路径；留空则用默认 <项目根>/data/knowledge_graph.json
+    GRAPH_DATA_PATH: str = ""
+    # 评估循环开关：false 时跳过相关性/充分度评估直接出答案（降级）
+    EVAL_LOOP_ENABLED: bool = True
+    EVAL_MAX_LOOPS: int = 3
+    # 图谱子图最大节点数，避免上下文膨胀
+    GRAPH_HOP: int = 1
+
+    @property
+    def graph_data_file(self) -> str:
+        """图谱数据文件绝对路径（默认 <项目根>/data/knowledge_graph.json）。"""
+        return self.GRAPH_DATA_PATH or str(BASE_DIR / "data" / "knowledge_graph.json")
+
     @property
     def mysql_url(self) -> str:
         return (
