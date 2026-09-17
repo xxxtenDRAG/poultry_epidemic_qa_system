@@ -1,0 +1,31 @@
+# ---- Web 框架 ----
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+pydantic
+pydantic-settings
+
+# ---- RAG / Agent ----
+llama-index
+chromadb
+langchain
+langgraph
+
+# ---- 本地向量化 / 精排（bge 模型）----
+sentence-transformers
+torch
+
+# ---- 文档解析 ----
+pypdf2
+pdfplumber
+python-docx
+
+# ---- 知识图谱 ----
+networkx
+python-louvain
+
+# ---- 数据库 / 缓存 ----
+sqlalchemy
+pymysql
+redis

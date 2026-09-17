@@ -1,0 +1,33 @@
+# ---- 密钥与本地配置 ----
+.env
+*.local
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# ---- Node / 前端 ----
+node_modules/
+dist/
+*.local
+
+# ---- IDE / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- 运行数据（向量库 / 上传文件 / 日志）----
+data/
+chroma_data/
+uploads/
+logs/
+*.log
+
+# ---- 文档解析临时产物 ----
+*.tmp
