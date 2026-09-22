@@ -28,5 +28,6 @@
   - `question`：问题
   - `expected_answer`：参考答案
   - `source_doc`：来源文档名，需与 `knowledge/` 下文件名**去掉扩展名**一致（`scripts/evaluate_retrieval.py` 据此计算 Hit@K）
-- 起步 20–30 条（当前 24 条），最终 50–100 条；补充新知识文档后应同步扩充对应主题的样本。
+- 当前 **52 条**，已覆盖 `knowledge/` 全部 10 份文档（每份 4-9 条），方案目标 50–100 条。
+- 新增知识文档时应同步补充对应主题的样本；知识库规模变化后需重跑 `python -m scripts.evaluate_retrieval` 复测 Hit@K 并更新 `docs/eval_report.md`。
 
