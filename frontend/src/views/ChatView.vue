@@ -259,12 +259,24 @@ onMounted(async () => {
 .welcome-text { color: #909399; font-size: 14px; margin: 0; }
 
 /* 快捷提问模板 */
-.quick-questions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; max-width: 600px; }
-.quick-tag { cursor: pointer; transition: all 0.2s; }
-.quick-tag:hover { transform: translateY(-2px); box-shadow: 0 2px 8px rgba(31, 111, 84, 0.2); }
+.quick-questions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 24px; max-width: 640px; }
+.quick-tag {
+  cursor: pointer; padding: 10px 18px; border-radius: 20px;
+  background: #fff; border: 1px solid #e4e7ed; color: #1f6f54;
+  font-size: 14px; transition: all 0.3s ease;
+}
+.quick-tag:hover {
+  background: #1f6f54; color: #fff; border-color: #1f6f54;
+  transform: translateY(-2px); box-shadow: 0 4px 12px rgba(31, 111, 84, 0.25);
+}
 
 /* 消息头像 */
-.avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; margin-top: 2px; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+  flex-shrink: 0; margin-top: 2px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1);
+  border: 2px solid #fff;
+}
 .msg-row.assistant .avatar { margin-right: 10px; }
 .msg-row.user .avatar { margin-left: 10px; }
 
