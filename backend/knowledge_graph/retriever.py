@@ -158,3 +158,35 @@ def get_overview() -> dict:
         "community_count": len(communities),
         "communities": [{"id": c, "size": s} for c, s in sorted(communities.items())],
     }
+
+
+def get_entity_detail(entity: str) -> dict:
+    """单个实体的完整详情：属性 + 关联关系列表（供前端点击节点展示）。"""
+    g = load_graph()
+    if entity not in g:
+        return {"entity": entity, "found": False}
+    node = g.nodes[entity]
+    # 关联关系
+    relations = []
+    for succ in g.successors(entity):
+        relations.append({
+            "direction": "out",
+            "relation": g.edges[entity, succ].get("relation", ""),
+            "target": succ,
+            "target_type": g.nodes[succ].get("type", "")
+        })
+    for pred in g.predecessors(entity):
+        relations.append({
+            "direction": "in",
+            "relation": g.edges[pred, entity].get("relation", ""),
+            "target": pred,
+            "target_type": g.nodes[pred].get("type", "")
+        })
+    return {
+        "entity": entity,
+        "found": True,
+        "type": node.get("type", ""),
+        "community": node.get("community", -1),
+        "docs": node.get("docs", []),
+        "relations": relations
+    }

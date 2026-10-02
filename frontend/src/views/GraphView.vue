@@ -11,6 +11,23 @@ const overview = ref(null)
 const chartRef = ref(null)
 let chart = null
 
+// 节点详情弹窗
+const detailVisible = ref(false)
+const detailData = ref(null)
+const detailLoading = ref(false)
+
+async function showEntityDetail(name) {
+  detailLoading.value = true
+  detailVisible.value = true
+  try {
+    detailData.value = await api.graph.entity(name)
+  } catch (e) {
+    detailData.value = { entity: name, found: false }
+  } finally {
+    detailLoading.value = false
+  }
+}
+
 // 实体类型 → 颜色映射（用于前端图例）
 const typeColors = {
   疾病: '#f56c6c', 病原: '#409eff', 症状: '#e6a23c', 药物: '#67c23a',
@@ -80,12 +97,13 @@ function render() {
     }]
   }, true)
 
-  // 点选节点二次查询
+  // 点选节点二次查询 + 弹出详情
   chart.off('click')
   chart.on('click', (p) => {
     if (p.dataType === 'node' && p.data?.name) {
       entity.value = p.data.name
       query()
+      showEntityDetail(p.data.name)
     }
   })
   window.addEventListener('resize', resizeListener)
@@ -117,6 +135,39 @@ onBeforeUnmount(() => {
           <el-empty v-if="!queried" description="输入实体开始查询，将展示实体与其关联关系" />
           <el-empty v-else-if="!result?.nodes?.length" description="知识库未命中实体，请换个实体试试" />
           <div v-else ref="chartRef" class="chart" />
+
+          <!-- 节点详情弹窗 -->
+          <el-dialog v-model="detailVisible" :title="detailData?.entity || '实体详情'" width="480px">
+            <div v-if="detailLoading" class="detail-loading">加载中…</div>
+            <template v-else-if="detailData?.found">
+              <el-descriptions :column="1" size="small" border>
+                <el-descriptions-item label="实体">{{ detailData.entity }}</el-descriptions-item>
+                <el-descriptions-item label="类型">
+                  <el-tag size="small" :color="typeColors[detailData.type] || '#909399'" effect="dark">
+                    {{ detailData.type || '未分类' }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="社区">{{ detailData.community }}</el-descriptions-item>
+                <el-descriptions-item label="来源文档" v-if="detailData.docs?.length">
+                  {{ detailData.docs.join('、') }}
+                </el-descriptions-item>
+              </el-descriptions>
+              <template v-if="detailData.relations?.length">
+                <h4 style="margin: 16px 0 8px;">关联关系（{{ detailData.relations.length }}）</h4>
+                <div class="relation-list">
+                  <div v-for="(r, i) in detailData.relations" :key="i" class="relation-item">
+                    <el-tag size="small" :type="r.direction === 'out' ? 'success' : 'warning'">
+                      {{ r.direction === 'out' ? '→' : '←' }}
+                    </el-tag>
+                    <span class="rel-name">{{ r.relation }}</span>
+                    <span class="rel-target">{{ r.target }}</span>
+                    <el-tag size="small" effect="plain" class="rel-type">{{ r.target_type }}</el-tag>
+                  </div>
+                </div>
+              </template>
+            </template>
+            <el-empty v-else description="图谱中未找到该实体" :image-size="60" />
+          </el-dialog>
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -144,6 +195,12 @@ onBeforeUnmount(() => {
 .query-bar { display: flex; gap: 12px; margin-bottom: 16px; }
 .query-bar .el-input { max-width: 420px; }
 .chart { width: 100%; height: 68vh; }
+.detail-loading { text-align: center; padding: 40px; color: #909399; }
+.relation-list { display: flex; flex-direction: column; gap: 8px; }
+.relation-item { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: #f5f7fa; }
+.rel-name { font-weight: 500; color: #303133; }
+.rel-target { color: #1f6f54; font-weight: 600; }
+.rel-type { margin-left: auto; }
 .legend { display: flex; flex-direction: column; gap: 8px; }
 .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }

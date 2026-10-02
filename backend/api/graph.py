@@ -21,3 +21,9 @@ async def query_graph(entity: str = Query(..., description="查询实体")):
 async def graph_overview():
     """图谱规模与社区统计。"""
     return retriever.get_overview()
+
+
+@router.get("/graph/entity")
+async def entity_detail(entity: str = Query(..., description="实体名称")):
+    """单个实体的完整详情：属性 + 关联关系列表。"""
+    return retriever.get_entity_detail(entity)

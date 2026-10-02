@@ -19,6 +19,7 @@ export const api = {
   // ---- 知识图谱 ----
   graph: {
     query: (entity) => request.get('/graph/query', { params: { entity } }),
-    overview: () => request.get('/graph/overview')
+    overview: () => request.get('/graph/overview'),
+    entity: (entity) => request.get('/graph/entity', { params: { entity } })
   }
 }
