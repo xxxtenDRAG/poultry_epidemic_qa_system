@@ -19,6 +19,19 @@ const msgListRef = ref(null)
 const imageUrl = ref(null)   // 上传后的图片 URL，如 /uploads/xxx.jpg
 const imagePreview = ref(null) // FileReader 预览 base64
 
+// 快捷提问模板
+const quickQuestions = [
+  '鹅副伤寒怎么防控？',
+  '鹅瘟的症状有哪些？',
+  '鹅禽流感如何预防？',
+  '鹅球虫病的治疗方法？',
+  '鹅啄羽癖怎么解决？'
+]
+
+function useQuickQuestion(q) {
+  question.value = q
+}
+
 function scrollToBottom() {
   nextTick(() => {
     const el = msgListRef.value
@@ -166,6 +179,15 @@ onMounted(async () => {
         <div v-if="!messages.length" class="welcome">
           <img :src="welcomeHero" class="welcome-img" alt="鹅医生" />
           <p class="welcome-text">输入下方问题，开始鹅养殖疫病咨询</p>
+          <div class="quick-questions">
+            <el-tag
+              v-for="(q, i) in quickQuestions"
+              :key="i"
+              class="quick-tag"
+              size="large"
+              @click="useQuickQuestion(q)"
+            >{{ q }}</el-tag>
+          </div>
         </div>
         <div v-for="(m, i) in messages" :key="i" class="msg-row" :class="m.role">
           <img v-if="m.role === 'assistant'" :src="assistantAvatar" class="avatar" alt="助手" />
@@ -235,6 +257,11 @@ onMounted(async () => {
 .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; }
 .welcome-img { max-height: 260px; max-width: 320px; object-fit: contain; }
 .welcome-text { color: #909399; font-size: 14px; margin: 0; }
+
+/* 快捷提问模板 */
+.quick-questions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; max-width: 600px; }
+.quick-tag { cursor: pointer; transition: all 0.2s; }
+.quick-tag:hover { transform: translateY(-2px); box-shadow: 0 2px 8px rgba(31, 111, 84, 0.2); }
 
 /* 消息头像 */
 .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; margin-top: 2px; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
