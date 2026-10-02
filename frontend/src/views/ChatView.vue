@@ -4,6 +4,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture, Close } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { streamChat } from '../utils/sse'
+import assistantAvatar from '../assets/01-assistant-avatar.png'
+import userAvatar from '../assets/02-user-avatar.png'
+import welcomeHero from '../assets/03-welcome-hero.png'
+import thinkingImg from '../assets/04-thinking.png'
 
 const sessions = ref([])
 const currentId = ref(null)
@@ -159,12 +163,12 @@ onMounted(async () => {
     <!-- 对话区 -->
     <section class="chat-main">
       <div ref="msgListRef" class="msg-list">
-        <el-empty
-          v-if="!messages.length"
-          description="输入下方问题，开始鹅养殖疫病咨询"
-          :image-size="100"
-        />
+        <div v-if="!messages.length" class="welcome">
+          <img :src="welcomeHero" class="welcome-img" alt="鹅医生" />
+          <p class="welcome-text">输入下方问题，开始鹅养殖疫病咨询</p>
+        </div>
         <div v-for="(m, i) in messages" :key="i" class="msg-row" :class="m.role">
+          <img v-if="m.role === 'assistant'" :src="assistantAvatar" class="avatar" alt="助手" />
           <div class="bubble">
             <div class="bubble-text" v-html="m.content.replace(/\n/g, '<br>')" />
             <img v-if="m.image" :src="m.image" class="msg-img" />
@@ -178,8 +182,12 @@ onMounted(async () => {
               >{{ s.doc }} · 块{{ s.index }}</el-tag>
             </div>
           </div>
+          <img v-if="m.role === 'user'" :src="userAvatar" class="avatar" alt="我" />
         </div>
-        <div v-if="streaming" class="cursor" />
+        <div v-if="streaming" class="thinking">
+          <img :src="thinkingImg" class="thinking-img" alt="思考中" />
+          <span class="thinking-text">鹅医生正在思考…</span>
+        </div>
       </div>
 
       <div v-if="imagePreview" class="img-preview-bar">
@@ -222,6 +230,23 @@ onMounted(async () => {
 
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .msg-list { flex: 1; overflow-y: auto; padding: 20px; }
+
+/* 欢迎区：鹅医生大图 */
+.welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; }
+.welcome-img { max-height: 260px; max-width: 320px; object-fit: contain; }
+.welcome-text { color: #909399; font-size: 14px; margin: 0; }
+
+/* 消息头像 */
+.avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; margin-top: 2px; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.msg-row.assistant .avatar { margin-right: 10px; }
+.msg-row.user .avatar { margin-left: 10px; }
+
+/* 思考中 */
+.thinking { display: flex; align-items: center; gap: 10px; margin: 0 0 16px 6px; }
+.thinking-img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; animation: bob 1.2s ease-in-out infinite; }
+.thinking-text { color: #909399; font-size: 13px; }
+@keyframes bob { 50% { transform: translateY(-5px); } }
+
 .msg-row { display: flex; margin-bottom: 16px; }
 .msg-row.user { justify-content: flex-end; }
 .msg-row.assistant { justify-content: flex-start; }
@@ -230,11 +255,6 @@ onMounted(async () => {
 .msg-row.assistant .bubble { background: #fff; border: 1px solid #e4e7ed; }
 .bubble-text { white-space: pre-wrap; word-break: break-word; }
 .sources { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
-.cursor {
-  width: 8px; height: 18px; background: #1f6f54; display: inline-block;
-  animation: blink 0.8s infinite; margin: 0 0 16px 14px;
-}
-@keyframes blink { 50% { opacity: 0; } }
 .input-bar { display: flex; gap: 12px; padding: 12px 20px; background: #fff; border-top: 1px solid #e4e7ed; }
 .input-bar .el-textarea { flex: 1; }
 
