@@ -10,6 +10,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true
+      },
+      // 开发环境将 /uploads 代理到 FastAPI 静态目录
+      '/uploads': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
       }
     }
   }

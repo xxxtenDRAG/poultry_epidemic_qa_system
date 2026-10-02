@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Picture, Close } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { streamChat } from '../utils/sse'
 
@@ -11,6 +12,8 @@ const messages = ref([]) // { role, content, sources }
 const question = ref('')
 const streaming = ref(false)
 const msgListRef = ref(null)
+const imageUrl = ref(null)   // 上传后的图片 URL，如 /uploads/xxx.jpg
+const imagePreview = ref(null) // FileReader 预览 base64
 
 function scrollToBottom() {
   nextTick(() => {
@@ -53,27 +56,56 @@ async function removeSession(id) {
   await refreshSessions()
 }
 
+function handleImageSelect(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => { imagePreview.value = reader.result }
+  reader.readAsDataURL(file)
+  // 先上传
+  uploadImage(file)
+}
+
+async function uploadImage(file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  try {
+    const resp = await fetch('/api/chat/upload-image', { method: 'POST', body: fd })
+    if (!resp.ok) throw new Error('上传失败')
+    const data = await resp.json()
+    imageUrl.value = data.url
+  } catch (e) {
+    ElMessage.error(e.message)
+    imagePreview.value = null
+  }
+}
+
+function removeImage() {
+  imageUrl.value = null
+  imagePreview.value = null
+}
+
 async function send() {
   const q = question.value.trim()
-  if (!q || streaming.value) return
+  if ((!q && !imageUrl.value) || streaming.value) return
   question.value = ''
 
   // 无会话时先创建
   if (!currentId.value) {
-    const s = await api.sessions.create(q.slice(0, 20))
+    const s = await api.sessions.create(q.slice(0, 20) || '图片识别')
     currentId.value = s.id
     currentTitle.value = '新会话'
     await refreshSessions()
   }
 
-  messages.value.push({ role: 'user', content: q })
+  messages.value.push({ role: 'user', content: q || '（已上传图片）', image: imagePreview.value })
   messages.value.push({ role: 'assistant', content: '', sources: [] })
   streaming.value = true
   scrollToBottom()
 
   const assistant = messages.value[messages.value.length - 1]
   await streamChat(
-    { session_id: currentId.value, question: q },
+    { session_id: currentId.value, question: q, image_url: imageUrl.value },
     {
       onToken: (t) => {
         assistant.content += t
@@ -93,6 +125,9 @@ async function send() {
       }
     }
   )
+
+  imageUrl.value = null
+  imagePreview.value = null
 }
 
 onMounted(async () => {
@@ -132,6 +167,7 @@ onMounted(async () => {
         <div v-for="(m, i) in messages" :key="i" class="msg-row" :class="m.role">
           <div class="bubble">
             <div class="bubble-text" v-html="m.content.replace(/\n/g, '<br>')" />
+            <img v-if="m.image" :src="m.image" class="msg-img" />
             <div v-if="m.role === 'assistant' && m.sources?.length" class="sources">
               <el-tag
                 v-for="(s, j) in m.sources"
@@ -146,6 +182,10 @@ onMounted(async () => {
         <div v-if="streaming" class="cursor" />
       </div>
 
+      <div v-if="imagePreview" class="img-preview-bar">
+        <img :src="imagePreview" class="img-preview" />
+        <el-icon class="img-del" @click="removeImage"><Close /></el-icon>
+      </div>
       <div class="input-bar">
         <el-input
           v-model="question"
@@ -157,6 +197,10 @@ onMounted(async () => {
           @keydown.enter.exact.prevent="send"
         />
         <el-button type="primary" :loading="streaming" @click="send">发送</el-button>
+        <label class="img-upload-btn">
+          <el-icon><Picture /></el-icon>
+          <input type="file" accept="image/*" style="display:none" @change="handleImageSelect" />
+        </label>
       </div>
     </section>
   </div>
@@ -193,4 +237,11 @@ onMounted(async () => {
 @keyframes blink { 50% { opacity: 0; } }
 .input-bar { display: flex; gap: 12px; padding: 12px 20px; background: #fff; border-top: 1px solid #e4e7ed; }
 .input-bar .el-textarea { flex: 1; }
+
+.img-preview-bar { display: flex; align-items: center; gap: 8px; padding: 8px 20px; background: #fff; border-top: 1px solid #e4e7ed; }
+.img-preview { max-height: 80px; border-radius: 6px; border: 1px solid #e4e7ed; }
+.img-del { cursor: pointer; color: #f56c6c; }
+.img-upload-btn { cursor: pointer; padding: 8px; color: #606266; }
+.img-upload-btn:hover { color: #1f6f54; }
+.msg-img { max-width: 200px; max-height: 200px; border-radius: 6px; margin-top: 8px; display: block; }
 </style>

@@ -6,10 +6,12 @@ DeepSeek 首 token 到达即推送，无需等完整答案。
 """
 import asyncio
 import json
+import uuid
+from pathlib import Path
 from typing import AsyncGenerator
 
 import anyio
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as OrmSession
@@ -20,22 +22,56 @@ from db.session import get_db
 
 router = APIRouter()
 
+UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "uploads"
+
 _DONE = object()  # 生产者结束哨兵
 
 
 class ChatRequest(BaseModel):
     session_id: int | None = None
-    question: str
+    question: str = ""
+    image_url: str | None = None  # 用户上传的图片 URL（如 /uploads/xxx.jpg）
 
 
-async def _stream_answer(question: str, session_id: int, db: OrmSession) -> AsyncGenerator[str, None]:
+@router.post("/chat/upload-image")
+async def upload_chat_image(file: UploadFile = File(...)):
+    suffix = Path(file.filename or ".jpg").suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        raise HTTPException(status_code=400, detail="仅支持 jpg/png/webp/gif")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    uid = uuid.uuid4().hex
+    target = UPLOAD_DIR / f"{uid}{suffix}"
+    target.write_bytes(await file.read())
+    return {"url": f"/uploads/{target.name}"}
+
+
+async def _stream_answer(question: str, image_url: str | None, session_id: int, db: OrmSession) -> AsyncGenerator[str, None]:
     # 保存用户消息
     db.add(Message(session_id=session_id, role="user", content=question))
     db.commit()
 
+    # 如果带图片，先调用视觉模型识别
+    image_desc = ""
+    if image_url:
+        from agent.graph import identify_disease
+        img_path = Path(__file__).resolve().parent.parent.parent / "data" / "uploads" / Path(image_url).name
+        if img_path.exists():
+            try:
+                image_desc = identify_disease(str(img_path))
+            except Exception as e:
+                image_desc = f"（图片识别失败：{e}）"
+        else:
+            image_desc = "（图片未找到）"
+
+    # 把图片描述和原问题拼在一起
+    if image_desc:
+        enriched_question = f"【用户上传了鹅病图片，识别结果如下】\n{image_desc}\n\n用户原问题：{question}"
+    else:
+        enriched_question = question
+
     # 阶段一：理解 + 检索（同步阻塞，放线程池）
     try:
-        state = await anyio.to_thread.run_sync(prepare, question)
+        state = await anyio.to_thread.run_sync(prepare, enriched_question)
     except Exception as e:
         db.rollback()
         yield f"data: {json.dumps({'type': 'error', 'message': f'检索失败：{e}'}, ensure_ascii=False)}\n\n"
@@ -90,14 +126,14 @@ async def chat_stream(req: ChatRequest, db: OrmSession = Depends(get_db)):
     """SSE 流式问答。session_id 为空或不存在时自动创建新会话。"""
     session_id = req.session_id
     if session_id is None or db.get(Session, session_id) is None:
-        session = Session(title=req.question[:20])
+        session = Session(title=req.question[:20] or "图片识别")
         db.add(session)
         db.commit()
         db.refresh(session)
         session_id = session.id
 
     return StreamingResponse(
-        _stream_answer(req.question, session_id, db),
+        _stream_answer(req.question, req.image_url, session_id, db),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

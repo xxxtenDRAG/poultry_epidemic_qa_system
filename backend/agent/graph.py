@@ -7,10 +7,11 @@
 
 运行：python -m scripts.agent_chat "你的问题"
 """
+import base64
 import re
 
 from core.config import settings
-from core.llm import get_client
+from core.llm import get_client, get_vision_client
 from data_pipeline.retriever import retrieve_multi
 from knowledge_graph import retriever as graph_retriever
 from .state import AgentState
@@ -193,7 +194,9 @@ def build_prompt(state: AgentState) -> str:
     context = "\n\n".join(blocks)
     return (
         "你是一名鹅养殖疫病风险评估助手。请仅根据下面的参考资料回答问题，"
-        "不要编造资料之外的内容；如果资料不足以回答，请明确说明。\n\n"
+        "不要编造资料之外的内容；如果资料不足以回答，请明确说明。\n"
+        "回答请使用纯文本，不要使用 Markdown 格式（如 **、*、#、- 等符号），"
+        "直接以自然语句和数字序号表述。\n\n"
         f"参考资料：\n{context}\n\n问题：{state['query']}\n"
     )
 
@@ -219,3 +222,31 @@ def finish(state: AgentState) -> list[dict]:
     """溯源标注，返回 sources。"""
     trace_sources(state)
     return state["sources"]
+
+
+def identify_disease(image_path: str) -> str:
+    """上传鹅病图片，调用视觉模型识别疾病类型及症状描述，返回文本。"""
+    client = get_vision_client()
+    with open(image_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode("utf-8")
+
+    prompt = (
+        "你是一名鹅养殖疫病专家。请仔细观察图片，识别图中鹅只的症状表现，"
+        "判断可能的疾病类型，并给出：1)症状描述 2)初步判断的病名 3)建议。"
+        "请用中文回答。"
+    )
+    resp = client.chat.completions.create(
+        model=settings.VISION_MODEL if settings.VISION_ENABLED else settings.DEEPSEEK_MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                ],
+            }
+        ],
+        temperature=0.3,
+        max_tokens=500,
+    )
+    return resp.choices[0].message.content or "无法识别图片内容"

@@ -1,6 +1,7 @@
 """全局配置：从环境变量 / .env 读取，密钥严禁硬编码。"""
 import os
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,6 +28,12 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
     DEEPSEEK_MODEL: str = "deepseek-chat"
+
+    # Vision（图片识别）—— 默认关闭，需配置 VISION_API_KEY 后启用
+    VISION_ENABLED: bool = False
+    VISION_MODEL: str = "qwen-vl-max-latest"
+    VISION_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    VISION_API_KEY: str = ""
 
     # 本地向量化 / 精排（sentence-transformers，无需 API Key；首次使用自动下载模型）
     EMBEDDING_MODEL: str = "BAAI/bge-small-zh-v1.5"
@@ -69,7 +76,7 @@ class Settings(BaseSettings):
     @property
     def mysql_url(self) -> str:
         return (
-            f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}"
+            f"mysql+pymysql://{quote_plus(self.MYSQL_USER)}:{quote_plus(self.MYSQL_PASSWORD)}"
             f"@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DATABASE}?charset=utf8mb4"
         )
 

@@ -5,15 +5,19 @@
 """
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import anyio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from core.config import settings
 from core.exceptions import register_exception_handlers
 from api import chat, documents, graph, sessions
 from db.init_db import init_db
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def _warmup_embedder() -> None:
@@ -64,6 +68,9 @@ app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(graph.router, prefix="/api", tags=["graph"])
 app.include_router(sessions.router, prefix="/api", tags=["sessions"])
+
+# 挂载上传图片静态目录
+app.mount("/uploads", StaticFiles(directory=str(BASE_DIR / "data" / "uploads")), name="uploads")
 
 
 @app.get("/api/health", tags=["system"])
