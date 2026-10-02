@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Picture, Close } from '@element-plus/icons-vue'
+import { Picture, Close, Download, Document } from '@element-plus/icons-vue'
 import { api } from '../api'
 import { streamChat } from '../utils/sse'
 import assistantAvatar from '../assets/01-assistant-avatar.png'
@@ -30,6 +30,73 @@ const quickQuestions = [
 
 function useQuickQuestion(q) {
   question.value = q
+}
+
+// 导出会话为 Markdown
+function exportMarkdown() {
+  if (!messages.value.length) {
+    ElMessage.warning('当前会话为空，无法导出')
+    return
+  }
+  const title = currentTitle.value || '鹅养殖咨询会话'
+  const date = new Date().toLocaleString('zh-CN')
+  let md = `# ${title}\n\n导出时间：${date}\n\n---\n\n`
+  for (const m of messages.value) {
+    const role = m.role === 'user' ? '**我**' : '**鹅医生**'
+    md += `${role}：${m.content}\n\n`
+    if (m.sources?.length) {
+      md += `> 来源：${m.sources.map(s => `${s.doc}·块${s.index}`).join('、')}\n\n`
+    }
+  }
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${title}-${Date.now()}.md`
+  a.click()
+  URL.revokeObjectURL(a.href)
+  ElMessage.success('已导出 Markdown 文件')
+}
+
+// 导出会话为 PDF（生成 HTML 文件下载，浏览器打开后可另存为 PDF）
+function exportPdf() {
+  if (!messages.value.length) {
+    ElMessage.warning('当前会话为空，无法导出')
+    return
+  }
+  const title = currentTitle.value || '鹅养殖咨询会话'
+  const date = new Date().toLocaleString('zh-CN')
+  let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>
+  body { font-family: "Microsoft YaHei", sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+  h1 { color: #1f6f54; border-bottom: 2px solid #1f6f54; padding-bottom: 10px; }
+  .meta { color: #909399; font-size: 14px; margin-bottom: 30px; }
+  .msg { margin-bottom: 20px; padding: 15px; border-radius: 8px; page-break-inside: avoid; }
+  .user { background: #e6f4ec; border-left: 4px solid #1f6f54; }
+  .assistant { background: #f5f7fa; border-left: 4px solid #909399; }
+  .role { font-weight: bold; margin-bottom: 8px; }
+  .content { line-height: 1.8; white-space: pre-wrap; }
+  .sources { margin-top: 10px; font-size: 13px; color: #606266; }
+  @media print { body { padding: 20px; } }
+</style></head><body>
+<h1>${title}</h1>
+<div class="meta">导出时间：${date}</div>`
+  for (const m of messages.value) {
+    const role = m.role === 'user' ? '我' : '鹅医生'
+    const cls = m.role === 'user' ? 'user' : 'assistant'
+    html += `<div class="msg ${cls}"><div class="role">${role}</div><div class="content">${m.content.replace(/\n/g, '<br>')}</div>`
+    if (m.sources?.length) {
+      html += `<div class="sources">来源：${m.sources.map(s => `${s.doc}·块${s.index}`).join('、')}</div>`
+    }
+    html += `</div>`
+  }
+  html += `<script>window.onload = () => window.print()<\/script></body></html>`
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${title}-${Date.now()}.html`
+  a.click()
+  URL.revokeObjectURL(a.href)
+  ElMessage.success('已下载 HTML 文件，打开后按 Ctrl+P 另存为 PDF')
 }
 
 function scrollToBottom() {
@@ -175,6 +242,17 @@ onMounted(async () => {
 
     <!-- 对话区 -->
     <section class="chat-main">
+      <div class="chat-header" v-if="messages.length">
+        <span class="chat-title">{{ currentTitle }}</span>
+        <div class="chat-actions">
+          <el-tooltip content="导出 Markdown" placement="bottom">
+            <el-button size="small" circle @click="exportMarkdown"><el-icon><Download /></el-icon></el-button>
+          </el-tooltip>
+          <el-tooltip content="导出 PDF" placement="bottom">
+            <el-button size="small" circle @click="exportPdf"><el-icon><Document /></el-icon></el-button>
+          </el-tooltip>
+        </div>
+      </div>
       <div ref="msgListRef" class="msg-list">
         <div v-if="!messages.length" class="welcome">
           <img :src="welcomeHero" class="welcome-img" alt="鹅医生" />
@@ -251,6 +329,14 @@ onMounted(async () => {
 .side-item:hover .side-del { visibility: visible; }
 
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+/* 对话头部 */
+.chat-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-bottom: 1px solid #e4e7ed; background: #fff;
+}
+.chat-title { font-weight: 600; color: #303133; }
+.chat-actions { display: flex; gap: 8px; }
+
 .msg-list { flex: 1; overflow-y: auto; padding: 20px; }
 
 /* 欢迎区：鹅医生大图 */
