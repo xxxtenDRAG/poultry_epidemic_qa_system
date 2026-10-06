@@ -11,8 +11,9 @@ export const api = {
   },
   // ---- 文档 ----
   documents: {
-    upload: (file, onProgress) =>
-      request.post('/documents/upload', file, { onUploadProgress: onProgress }),
+    // 第二参直接作为 axios config（{ onUploadProgress, timeout, ... }）
+    upload: (file, config) =>
+      request.post('/documents/upload', file, config),
     list: () => request.get('/documents'),
     remove: (id) => request.delete(`/documents/${id}`)
   },
@@ -20,6 +21,9 @@ export const api = {
   graph: {
     query: (entity) => request.get('/graph/query', { params: { entity } }),
     overview: () => request.get('/graph/overview'),
-    entity: (entity) => request.get('/graph/entity', { params: { entity } })
+    entity: (entity) => request.get('/graph/entity', { params: { entity } }),
+    search: (keyword, limit = 10) =>
+      request.get('/graph/search', { params: { keyword, limit } }),
+    full: (type = '') => request.get('/graph/full', { params: { type } })
   }
 }

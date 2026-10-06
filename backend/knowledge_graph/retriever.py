@@ -2,10 +2,11 @@
 
 数据源：<项目根>/data/knowledge_graph.json（由 scripts/build_graph.py 生成）。
 降级原则：图谱文件缺失/为空、实体抽取失败、未命中实体 → 自动跳过图谱通道（不影响主链路）。
+重建图谱 JSON 后无需重启：load_graph 按文件 mtime 自动热加载。
 """
 import json
 import re
-from functools import lru_cache
+import threading
 from pathlib import Path
 
 import networkx as nx
@@ -19,28 +20,44 @@ _ENTITY_EXTRACT_PROMPT = (
 )
 
 
-@lru_cache(maxsize=1)
+_graph_lock = threading.Lock()
+_graph_cache: dict = {"g": None, "mtime": None}
+
+
 def load_graph() -> "nx.DiGraph":
-    """加载图谱 JSON 为 NetworkX 有向图（带 type / community / docs 节点属性）。"""
-    g = nx.DiGraph()
+    """加载图谱 JSON 为 NetworkX 有向图（带 type / community / docs 节点属性）。
+
+    按文件 mtime 缓存：build_graph 重新落盘后，下一次调用自动加载新图（无需重启服务）。
+    """
     path = Path(settings.graph_data_file)
     if not path.exists():
-        return g
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        for n in data.get("nodes", []):
-            g.add_node(
-                n["id"],
-                type=n.get("type", ""),
-                community=n.get("community", -1),
-                docs=n.get("docs", []),
-            )
-        for e in data.get("edges", []):
-            if g.has_node(e.get("source")) and g.has_node(e.get("target")):
-                g.add_edge(e["source"], e["target"], relation=e.get("relation", ""))
-    except Exception:  # noqa: BLE001 —— 加载失败降级为空图
         return nx.DiGraph()
-    return g
+    mtime = path.stat().st_mtime
+    cached = _graph_cache["g"]
+    if cached is not None and _graph_cache["mtime"] == mtime:
+        return cached
+    with _graph_lock:
+        # 双检：可能在等锁期间别的线程已经加载完
+        if _graph_cache["g"] is not None and _graph_cache["mtime"] == mtime:
+            return _graph_cache["g"]
+        g = nx.DiGraph()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for n in data.get("nodes", []):
+                g.add_node(
+                    n["id"],
+                    type=n.get("type", ""),
+                    community=n.get("community", -1),
+                    docs=n.get("docs", []),
+                )
+            for e in data.get("edges", []):
+                if g.has_node(e.get("source")) and g.has_node(e.get("target")):
+                    g.add_edge(e["source"], e["target"], relation=e.get("relation", ""))
+        except Exception:  # noqa: BLE001 —— 加载失败降级为空图
+            return nx.DiGraph()
+        _graph_cache["g"] = g
+        _graph_cache["mtime"] = mtime
+        return g
 
 
 def extract_entities(query: str) -> list[str]:
@@ -190,3 +207,55 @@ def get_entity_detail(entity: str) -> dict:
         "docs": node.get("docs", []),
         "relations": relations
     }
+
+
+def search_entities(keyword: str, limit: int = 10) -> dict:
+    """按关键词模糊搜索实体（供前端搜索联想）。
+
+    匹配规则：实体名包含关键词（大小写/空白不敏感）；前缀命中排在前面，
+    其余按关联度数（重要性）排序。返回实体基本信息，不含子图。
+    """
+    kw = re.sub(r"\s+", "", keyword or "").strip().lower()
+    g = load_graph()
+    if not kw:
+        return {"keyword": keyword or "", "entities": []}
+    prefix, substring = [], []
+    for name in g.nodes:
+        norm = name.lower()
+        if kw not in norm:
+            continue
+        item = {
+            "id": name,
+            "type": g.nodes[name].get("type", ""),
+            "community": g.nodes[name].get("community", -1),
+            "degree": g.degree(name),
+        }
+        (prefix if norm.startswith(kw) else substring).append(item)
+    prefix.sort(key=lambda x: (-x["degree"], x["id"]))
+    substring.sort(key=lambda x: (-x["degree"], x["id"]))
+    return {"keyword": keyword, "entities": (prefix + substring)[:limit]}
+
+
+def get_full_graph(entity_type: str | None = None) -> dict:
+    """全图浏览；指定 entity_type 时返回该类型节点及其一跳邻居子图（供前端按类型筛选）。"""
+    g = load_graph()
+    if entity_type:
+        centers = {n for n, d in g.nodes(data=True) if d.get("type") == entity_type}
+        if not centers:
+            return {"type": entity_type, "nodes": [], "edges": []}
+        keep = set(centers)
+        for n in centers:
+            keep |= set(g.successors(n)) | set(g.predecessors(n))
+        sub = g.subgraph(keep)
+    else:
+        sub = g
+
+    nodes = [
+        {"id": n, "type": sub.nodes[n].get("type", ""), "community": sub.nodes[n].get("community", -1)}
+        for n in sub.nodes
+    ]
+    edges = [
+        {"source": u, "target": v, "relation": sub.edges[u, v].get("relation", "")}
+        for u, v in sub.edges
+    ]
+    return {"type": entity_type or "", "nodes": nodes, "edges": edges}
