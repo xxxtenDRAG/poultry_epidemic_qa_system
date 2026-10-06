@@ -22,11 +22,17 @@ def add_documents(
     chunks: list[str],
     embeddings: list[list[float]],
 ) -> None:
-    """将分块文本 + 向量入库，id 形如 {doc_name}-{i}。"""
+    """将分块文本 + 向量入库（upsert，幂等），id 形如 {doc_name}-{i}。
+
+    用 upsert 而非 add：同名文档替换时重复 ID 不会报错；
+    注意块数变少的场景需调用方先 delete_by_doc 清旧块。
+    """
     col = get_collection()
+    if not chunks or not embeddings:
+        raise ValueError("没有可入库的文本块或向量（文档可能解析为空，如扫描版 PDF）")
     ids = [f"{doc_name}-{i}" for i in range(len(chunks))]
     metadatas = [{"doc": doc_name, "index": i} for i in range(len(chunks))]
-    col.add(ids=ids, documents=chunks, embeddings=embeddings, metadatas=metadatas)
+    col.upsert(ids=ids, documents=chunks, embeddings=embeddings, metadatas=metadatas)
 
 
 def search(
