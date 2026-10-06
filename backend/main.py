@@ -70,7 +70,9 @@ app.include_router(graph.router, prefix="/api", tags=["graph"])
 app.include_router(sessions.router, prefix="/api", tags=["sessions"])
 
 # 挂载上传图片静态目录
-app.mount("/uploads", StaticFiles(directory=str(BASE_DIR / "data" / "uploads")), name="uploads")
+_uploads_dir = BASE_DIR / "data" / "uploads"
+_uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
 
 
 @app.get("/api/health", tags=["system"])
