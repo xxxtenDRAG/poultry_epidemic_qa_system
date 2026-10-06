@@ -272,15 +272,6 @@ onMounted(async () => {
           <div class="bubble">
             <div class="bubble-text" v-html="m.content.replace(/\n/g, '<br>')" />
             <img v-if="m.image" :src="m.image" class="msg-img" />
-            <div v-if="m.role === 'assistant' && m.sources?.length" class="sources">
-              <el-tag
-                v-for="(s, j) in m.sources"
-                :key="j"
-                size="small"
-                type="info"
-                effect="plain"
-              >{{ s.doc }} · 块{{ s.index }}</el-tag>
-            </div>
           </div>
           <img v-if="m.role === 'user'" :src="userAvatar" class="avatar" alt="我" />
         </div>
