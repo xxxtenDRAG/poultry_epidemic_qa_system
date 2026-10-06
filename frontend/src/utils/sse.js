@@ -2,7 +2,7 @@
 
 /**
  * @param {object} payload { session_id?, question }
- * @param {object} handlers { onToken(content), onDone(answer, sources), onError(msg) }
+ * @param {object} handlers { onToken(content), onDone(answer, sources, alert), onError(msg) }
  */
 export async function streamChat(payload, { onToken, onDone, onError }) {
   try {
@@ -31,7 +31,7 @@ export async function streamChat(payload, { onToken, onDone, onError }) {
         if (!line.startsWith('data: ')) continue
         const evt = JSON.parse(line.slice(6))
         if (evt.type === 'token') onToken?.(evt.content)
-        else if (evt.type === 'done') onDone?.(evt.answer, evt.sources)
+        else if (evt.type === 'done') onDone?.(evt.answer, evt.sources, evt.alert)
       }
     }
   } catch (e) {

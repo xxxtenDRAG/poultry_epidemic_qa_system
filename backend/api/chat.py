@@ -69,6 +69,10 @@ async def _stream_answer(question: str, image_url: str | None, session_id: int, 
     else:
         enriched_question = question
 
+    # 急症预警：问题或图片识别结果命中急性疫情信号词时，前端展示红色警示条
+    from agent.graph import detect_emergency
+    is_emergency = detect_emergency(f"{question}\n{image_desc}")
+
     # 阶段一：理解 + 检索（同步阻塞，放线程池）
     try:
         state = await anyio.to_thread.run_sync(prepare, enriched_question)
@@ -118,7 +122,7 @@ async def _stream_answer(question: str, image_url: str | None, session_id: int, 
     )
     db.commit()
 
-    yield f"data: {json.dumps({'type': 'done', 'answer': state['answer'], 'sources': sources}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'answer': state['answer'], 'sources': sources, 'alert': is_emergency}, ensure_ascii=False)}\n\n"
 
 
 @router.post("/chat/stream")

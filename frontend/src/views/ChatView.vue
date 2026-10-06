@@ -28,6 +28,19 @@ const quickQuestions = [
   '鹅啄羽癖怎么解决？'
 ]
 
+// 急症预警关键词（与后端 _EMERGENCY_KEYWORDS 保持一致，用于历史消息恢复警示标志）
+const EMERGENCY_KEYWORDS = [
+  '禽流感', '流感', '小鹅瘟', '鸭瘟', '瘟', '副黏病毒', '副粘病毒', '新城疫',
+  '死亡', '死鹅', '死禽', '死了一批', '死好多', '大批死',
+  '扭颈', '转圈', '角弓反张', '抽搐', '瘫痪', '头颈肿胀', '呼吸困难', '张口呼吸',
+  '血便', '拉血', '便血', '带血'
+]
+
+function checkEmergency(text) {
+  if (!text) return false
+  return EMERGENCY_KEYWORDS.some((k) => text.includes(k))
+}
+
 function useQuickQuestion(q) {
   question.value = q
 }
@@ -117,7 +130,8 @@ async function loadSession(id) {
   messages.value = detail.messages.map((m) => ({
     role: m.role,
     content: m.content,
-    sources: m.sources ? JSON.parse(m.sources) : []
+    sources: m.sources ? JSON.parse(m.sources) : [],
+    alert: m.role === 'assistant' && checkEmergency(m.content)
   }))
   scrollToBottom()
 }
@@ -195,9 +209,10 @@ async function send() {
         assistant.content += t
         scrollToBottom()
       },
-      onDone: (answer, sources) => {
+      onDone: (answer, sources, alert) => {
         assistant.content = answer
         assistant.sources = sources
+        assistant.alert = !!alert
         streaming.value = false
         refreshSessions()
         scrollToBottom()
@@ -270,8 +285,14 @@ onMounted(async () => {
         <div v-for="(m, i) in messages" :key="i" class="msg-row" :class="m.role">
           <img v-if="m.role === 'assistant'" :src="assistantAvatar" class="avatar" alt="助手" />
           <div class="bubble">
+            <div v-if="m.role === 'assistant' && m.alert" class="emergency-alert">
+              ⚠️ 疑似急性疫情：请立即隔离病鹅，病死禽切勿随意丢弃或出售，并尽快联系当地兽医或动物疫控部门！
+            </div>
             <div class="bubble-text" v-html="m.content.replace(/\n/g, '<br>')" />
             <img v-if="m.image" :src="m.image" class="msg-img" />
+            <div v-if="m.role === 'assistant'" class="disclaimer">
+              以上内容基于知识库自动生成，仅供参考，不能替代专业兽医诊断；重大疫情请及时上报当地畜牧兽医部门。
+            </div>
           </div>
           <img v-if="m.role === 'user'" :src="userAvatar" class="avatar" alt="我" />
         </div>
@@ -306,7 +327,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.chat-wrap { display: flex; height: 100%; }
+/* 高度 = 视口 - 顶部标题栏(60px) - el-main 上下内边距(40px)，确保消息区内部滚动、输入框固定底部 */
+.chat-wrap { display: flex; height: calc(100vh - 100px); }
 .side { width: 220px; border-right: 1px solid #e4e7ed; padding: 12px; background: #fff; }
 .side-list { height: calc(100% - 48px); margin-top: 10px; }
 .side-item {
@@ -319,7 +341,7 @@ onMounted(async () => {
 .side-del { visibility: hidden; }
 .side-item:hover .side-del { visibility: visible; }
 
-.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 /* 对话头部 */
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -328,7 +350,7 @@ onMounted(async () => {
 .chat-title { font-weight: 600; color: #303133; }
 .chat-actions { display: flex; gap: 8px; }
 
-.msg-list { flex: 1; overflow-y: auto; padding: 20px; }
+.msg-list { flex: 1; min-height: 0; overflow-y: auto; padding: 20px; }
 
 /* 欢迎区：鹅医生大图 */
 .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; }
@@ -380,4 +402,28 @@ onMounted(async () => {
 .img-upload-btn { cursor: pointer; padding: 8px; color: #606266; }
 .img-upload-btn:hover { color: #1f6f54; }
 .msg-img { max-width: 200px; max-height: 200px; border-radius: 6px; margin-top: 8px; display: block; }
+
+/* 急症预警警示条 */
+.emergency-alert {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #fef0f0;
+  border: 1px solid #f56c6c;
+  border-left: 4px solid #f56c6c;
+  border-radius: 6px;
+  color: #c45656;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+/* 免责声明 */
+.disclaimer {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #e4e7ed;
+  font-size: 12px;
+  color: #a8abb2;
+  line-height: 1.5;
+}
 </style>

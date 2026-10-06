@@ -186,6 +186,26 @@ def prepare(question: str) -> AgentState:
     return state
 
 
+# ---- 急症预警：命中任一信号词即在前端展示红色警示条 ----
+_EMERGENCY_KEYWORDS = (
+    # 急性传染病名
+    "禽流感", "流感", "小鹅瘟", "鸭瘟", "瘟", "副黏病毒", "副粘病毒", "新城疫",
+    # 死亡类信号
+    "死亡", "死鹅", "死禽", "死了一批", "死好多", "大批死",
+    # 神经与重症症状
+    "扭颈", "转圈", "角弓反张", "抽搐", "瘫痪", "头颈肿胀", "呼吸困难", "张口呼吸",
+    # 出血类症状
+    "血便", "拉血", "便血", "带血",
+)
+
+
+def detect_emergency(text: str) -> bool:
+    """检测问题（或图片识别结果）中是否包含急性疫情信号词。"""
+    if not text:
+        return False
+    return any(k in text for k in _EMERGENCY_KEYWORDS)
+
+
 def build_prompt(state: AgentState) -> str:
     """构造生成 Prompt（与 generate 节点一致，含图谱上下文）。"""
     blocks = [
@@ -201,6 +221,8 @@ def build_prompt(state: AgentState) -> str:
         "不要编造资料之外的内容；如果资料确实不足以回答，再明确说明。\n"
         "2. 问候、闲聊、当前时间、使用帮助、常识等与专业知识无关的问题："
         "不必依赖参考资料，直接用简洁友好的语气回答即可（当前系统时间：" + now + "）。\n"
+        "3. 若问题涉及急性传染病、家禽大批死亡等紧急疫情，回答开头必须先给出应急提示，"
+        "包含：立即隔离病鹅、病死禽不得随意丢弃或出售、尽快联系当地兽医或动物疫控部门。\n"
         "回答请使用纯文本，不要使用 Markdown 格式（如 **、*、#、- 等符号），"
         "直接以自然语句和数字序号表述。\n\n"
         f"参考资料：\n{context}\n\n问题：{state['query']}\n"
