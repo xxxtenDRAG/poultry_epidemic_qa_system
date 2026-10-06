@@ -9,6 +9,8 @@
 """
 import base64
 import re
+from datetime import datetime
+from pathlib import Path
 
 from core.config import settings
 from core.llm import get_client, get_vision_client
@@ -192,9 +194,13 @@ def build_prompt(state: AgentState) -> str:
     if state.get("graph_context"):
         blocks.append(state["graph_context"])
     context = "\n\n".join(blocks)
+    now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
     return (
-        "你是一名鹅养殖疫病风险评估助手。请仅根据下面的参考资料回答问题，"
-        "不要编造资料之外的内容；如果资料不足以回答，请明确说明。\n"
+        "你是一名鹅养殖疫病风险评估助手。请先判断问题类型：\n"
+        "1. 鹅养殖、疫病、症状、用药、免疫、生物安全等专业问题：必须仅根据下面的参考资料回答，"
+        "不要编造资料之外的内容；如果资料确实不足以回答，再明确说明。\n"
+        "2. 问候、闲聊、当前时间、使用帮助、常识等与专业知识无关的问题："
+        "不必依赖参考资料，直接用简洁友好的语气回答即可（当前系统时间：" + now + "）。\n"
         "回答请使用纯文本，不要使用 Markdown 格式（如 **、*、#、- 等符号），"
         "直接以自然语句和数字序号表述。\n\n"
         f"参考资料：\n{context}\n\n问题：{state['query']}\n"
@@ -226,27 +232,39 @@ def finish(state: AgentState) -> list[dict]:
 
 def identify_disease(image_path: str) -> str:
     """上传鹅病图片，调用视觉模型识别疾病类型及症状描述，返回文本。"""
+    if not settings.VISION_ENABLED or not settings.VISION_API_KEY:
+        raise RuntimeError("图片识别未启用：请在 .env 配置 VISION_API_KEY 并设置 VISION_ENABLED=true")
+
     client = get_vision_client()
+    # 按真实扩展名设置 MIME，避免 png/webp 被误标为 jpeg
+    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                ".webp": "image/webp", ".gif": "image/gif"}
+    suffix = Path(image_path).suffix.lower()
+    mime = mime_map.get(suffix, "image/jpeg")
     with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("utf-8")
 
     prompt = (
-        "你是一名鹅养殖疫病专家。请仔细观察图片，识别图中鹅只的症状表现，"
-        "判断可能的疾病类型，并给出：1)症状描述 2)初步判断的病名 3)建议。"
-        "请用中文回答。"
+        "你是一名资深鹅养殖疫病诊断专家。请仔细观察图片中鹅只的外观与症状，"
+        "如果图片确实是鹅或病禽，请按以下结构用中文回答：\n"
+        "1. 观察到的症状（精神状态、羽毛、眼睛、口鼻、排泄物、行动姿态等）\n"
+        "2. 初步判断的可能疾病（列出 1-3 种可能性并说明依据，不要绝对化）\n"
+        "3. 紧急处理与就医建议（隔离、消毒、联系兽医等）\n"
+        "如果图片内容不是鹅/禽，或无法据此判断，请直接说明，不要编造疾病。\n"
+        "请使用纯文本回答，不要使用 Markdown 格式符号（如 **、*、# 等），用数字序号表述。"
     )
     resp = client.chat.completions.create(
-        model=settings.VISION_MODEL if settings.VISION_ENABLED else settings.DEEPSEEK_MODEL,
+        model=settings.VISION_MODEL,
         messages=[
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
                 ],
             }
         ],
         temperature=0.3,
-        max_tokens=500,
+        max_tokens=700,
     )
     return resp.choices[0].message.content or "无法识别图片内容"

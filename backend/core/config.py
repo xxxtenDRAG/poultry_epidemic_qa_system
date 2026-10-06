@@ -31,8 +31,8 @@ class Settings(BaseSettings):
 
     # Vision（图片识别）—— 默认关闭，需配置 VISION_API_KEY 后启用
     VISION_ENABLED: bool = False
-    VISION_MODEL: str = "qwen-vl-max-latest"
-    VISION_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    VISION_MODEL: str = "qwen3.5-flash"
+    VISION_BASE_URL: str = "https://maas.qianwenaiapi.com/compatible-mode/v1"
     VISION_API_KEY: str = ""
 
     # 本地向量化 / 精排（sentence-transformers，无需 API Key；首次使用自动下载模型）
