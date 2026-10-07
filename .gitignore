@@ -23,7 +23,9 @@ dist/
 Thumbs.db
 
 # ---- 运行数据（向量库 / 上传文件 / 日志）----
-data/
+# data/* 而非 data/：以便放行 graph_extract_cache.json（530+ 次 LLM 抽取结果，提交共享免重复调用）
+data/*
+!data/graph_extract_cache.json
 chroma_data/
 uploads/
 logs/
