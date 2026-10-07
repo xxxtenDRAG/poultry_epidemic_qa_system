@@ -21,6 +21,10 @@ pypdf2
 pdfplumber
 python-docx
 
+# ---- 扫描版 PDF OCR 预处理（scripts/ocr_pdf.py）----
+rapidocr-onnxruntime
+PyMuPDF
+
 # ---- 知识图谱 ----
 networkx
 python-louvain

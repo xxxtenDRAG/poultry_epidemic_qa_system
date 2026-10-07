@@ -29,5 +29,8 @@ uploads/
 logs/
 *.log
 
+# ---- OCR 按页缓存与本地合并产物（最终文本入库 datasets/knowledge/）----
+datasets/ocr_output/
+
 # ---- 文档解析临时产物 ----
 *.tmp
