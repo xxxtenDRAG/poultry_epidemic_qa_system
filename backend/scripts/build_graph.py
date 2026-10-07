@@ -15,9 +15,11 @@
 降级原则：某块三元组解析失败则跳过该块并记日志，不阻塞整条流水线。
 """
 import argparse
+import hashlib
 import json
 import re
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -33,6 +35,11 @@ ENTITY_TYPES = ["疾病", "病原", "症状", "药物", "疫苗", "宿主", "传
 RELATION_TYPES = ["引起", "表现为", "预防", "治疗", "易感", "传播"]
 MAX_TRIPLES_PER_CHUNK = 12
 MAX_ENTITY_LEN = 20
+# LLM 调用失败重试次数与退避基数（应对限流/网络抖动）
+API_RETRIES = 3
+
+# 抽取结果按块缓存（键=块文本 sha256，值=已归一化的三元组数组），中断重跑不丢进度
+CACHE_PATH = Path(settings.graph_data_file).parent / "graph_extract_cache.json"
 
 # 每种关系要求的 (头实体类型集合, 尾实体类型集合)；用于方向纠正与脏边过滤
 RELATION_SCHEMA = {
@@ -63,6 +70,11 @@ ENTITY_ALIASES = {
     "副黏病毒病": "鹅副黏病毒病",
     "高致病性禽流感": "禽流感",
     "高致病禽流感": "禽流感",
+    "鹅禽流感": "禽流感",
+    "大肠杆菌病": "鹅大肠杆菌病",
+    "鹅霍乱": "鹅巴氏杆菌病",
+    "禽霍乱": "鹅巴氏杆菌病",
+    "霍乱": "鹅巴氏杆菌病",
     "鹅细小病毒病": "小鹅瘟",
     "小鹅瘟病毒感染": "小鹅瘟",
     "病雏": "雏鹅",
@@ -149,8 +161,12 @@ def _normalize_triple(t: dict, dropped: list[str]) -> dict | None:
     return {"head": head, "head_type": htype, "rel": rel, "tail": tail, "tail_type": ttype}
 
 
-def _extract_triples(chunk: str, dropped: list[str]) -> list[dict]:
-    """用 DeepSeek 从单个知识块抽取三元组，解析失败返回空（降级跳过）。"""
+def _extract_triples(chunk: str, dropped: list[str]) -> list[dict] | None:
+    """用 DeepSeek 从单个知识块抽取三元组。
+
+    返回归一化后的三元组列表（可为空列表）；API 重试耗尽仍失败返回 None，
+    调用方不缓存 None，下次重跑会自动补抽。
+    """
     prompt = (
         _EXTRACT_PROMPT
         .replace("{max}", str(MAX_TRIPLES_PER_CHUNK))
@@ -158,29 +174,36 @@ def _extract_triples(chunk: str, dropped: list[str]) -> list[dict]:
         .replace("{relation_types}", "、".join(RELATION_TYPES))
         .replace("{chunk}", chunk[:1000])
     )
-    try:
-        resp = get_client().chat.completions.create(
-            model=settings.DEEPSEEK_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=1200,
-        )
-        text = (resp.choices[0].message.content or "").strip()
-        # 去掉 ```json 代码块包裹
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
-        data = json.loads(text)
-        if not isinstance(data, list):
-            return []
-        triples = []
-        for t in data:
-            if isinstance(t, dict) and t.get("head") and t.get("tail") and t.get("rel"):
-                norm = _normalize_triple(t, dropped)
-                if norm:
-                    triples.append(norm)
-        return triples
-    except Exception as e:  # noqa: BLE001 —— 单块失败降级跳过
-        print(f"[build_graph] 三元组解析失败，跳过该块：{e}")
+    data = None
+    for attempt in range(1, API_RETRIES + 1):
+        try:
+            resp = get_client().chat.completions.create(
+                model=settings.DEEPSEEK_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=1200,
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            # 去掉 ```json 代码块包裹
+            text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
+            data = json.loads(text)
+            break
+        except Exception as e:  # noqa: BLE001
+            if attempt == API_RETRIES:
+                print(f"[build_graph] 重试 {API_RETRIES} 次仍失败，跳过该块：{e}")
+                return None
+            wait = 2**attempt
+            print(f"[build_graph] 第 {attempt} 次调用失败（{e}），{wait}s 后重试…")
+            time.sleep(wait)
+    if not isinstance(data, list):
         return []
+    triples = []
+    for t in data:
+        if isinstance(t, dict) and t.get("head") and t.get("tail") and t.get("rel"):
+            norm = _normalize_triple(t, dropped)
+            if norm:
+                triples.append(norm)
+    return triples
 
 
 def build() -> None:
@@ -194,17 +217,46 @@ def build() -> None:
 
     import networkx as nx
 
-    # 先抽完所有块，再做跨三元组的病名省略归一（如 鹅副黏病毒[病原] ↔ 鹅副黏病毒病[疾病]）
+    # 先抽完所有块（带按块缓存与失败重试），再做跨三元组的病名省略归一
+    cache: dict[str, list] = {}
+    if CACHE_PATH.exists():
+        try:
+            cache = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 —— 缓存损坏则视为空
+            cache = {}
+
+    def _chunk_key(text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
     all_triples: list[tuple[str, dict]] = []
     dropped: list[str] = []
-    skipped = 0
-    for doc, meta in zip(chunks, metas):
+    skipped = failed = cache_hits = 0
+    total = len(chunks)
+    for i, (doc, meta) in enumerate(zip(chunks, metas), 1):
         doc_name = meta.get("doc", "unknown")
-        triples = _extract_triples(doc, dropped)
+        key = _chunk_key(doc)
+        if key in cache:
+            # 缓存的三元组已归一化过，这里再过一遍别名表：
+            # 保证别名表更新后旧缓存也能应用（归一化幂等）
+            triples = [
+                {**t, "head": _canonical(t["head"]), "tail": _canonical(t["tail"])}
+                for t in cache[key]
+            ]
+            cache_hits += 1
+        else:
+            triples = _extract_triples(doc, dropped)
+            if triples is None:  # 重试后仍失败：不缓存，重跑可补抽
+                failed += 1
+                continue
+            cache[key] = triples
+            CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
         if not triples:
             skipped += 1
             continue
         all_triples.extend((doc_name, t) for t in triples)
+        if i % 25 == 0 or i == total:
+            print(f"[build_graph] 进度 {i}/{total}（缓存命中 {cache_hits}，失败 {failed}），"
+                  f"已抽 {len(all_triples)} 条三元组")
 
     # P -[引起]-> P病：疾病位置（易感/预防/治疗 的尾端、表现为/传播 的头端）出现 P 时改写为 P病
     pathogen_to_disease = {
@@ -272,7 +324,8 @@ def build() -> None:
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     community_count = len({n["community"] for n in nodes if n["community"] >= 0})
-    print(f"[build_graph] 完成：块 {len(chunks)}（跳过 {skipped}）→ 节点 {len(nodes)} / 边 {len(edges)} / 社区 {community_count}")
+    print(f"[build_graph] 完成：块 {len(chunks)}（空结果 {skipped} / 失败 {failed} / 缓存命中 {cache_hits}）"
+          f"→ 节点 {len(nodes)} / 边 {len(edges)} / 社区 {community_count}")
     print(f"[build_graph] 清洗丢弃 {len(dropped)} 条：")
     for d in dropped[:20]:
         print(f"  - {d}")
