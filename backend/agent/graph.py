@@ -24,35 +24,69 @@ _REWRITE_PROMPT = (
     "每个查询一行，不要编号，不要多余文字。\n问题：{q}"
 )
 
+# 带历史时：要求补全指代词（它/这个病/上面说的），输出可独立检索的完整查询
+_REWRITE_WITH_HISTORY_PROMPT = (
+    "你是一名鹅养殖疫病问答检索助手。下面是用户与助手最近的对话：\n{history}\n\n"
+    "请结合对话历史，把用户的最后一个问题改写成 3 个不依赖上下文即可理解的独立搜索查询，"
+    "必须把其中的指代词（如“它”“这个病”“上面那种”）替换为对话中实际提到的鹅病或实体名称，"
+    "每个查询一行，不要编号，不要多余文字。\n最后一个问题：{q}"
+)
 
-def rewrite_queries(question: str) -> list[str]:
-    """用 DeepSeek 把用户问题改写为 3 个检索 Query（多路召回）。
 
-    失败时降级为原文单路（项目约定：复杂模块必须可关闭）。
+def _format_history(history: list[dict] | None) -> str:
+    """把历史消息渲染为 prompt 中的对话文本。"""
+    if not history:
+        return ""
+    lines = []
+    for h in history:
+        content = (h.get("content") or "").strip()
+        if not content:
+            continue
+        who = "用户" if h.get("role") == "user" else "助手"
+        lines.append(f"{who}：{content}")
+    return "\n".join(lines)
+
+
+def rewrite_queries(question: str, history: list[dict] | None = None) -> tuple[list[str], str]:
+    """用 DeepSeek 把用户问题改写为多路检索 Query。
+
+    带历史时要求消解指代词，返回 (去重后的检索 Query 列表, 独立问题)；
+    独立问题取首个改写结果，供图谱通道使用。失败时降级为原文单路。
     """
+    history_text = _format_history(history)
+    prompt = (
+        _REWRITE_WITH_HISTORY_PROMPT.format(history=history_text, q=question)
+        if history_text
+        else _REWRITE_PROMPT.format(q=question)
+    )
     try:
         resp = get_client().chat.completions.create(
             model=settings.DEEPSEEK_MODEL,
-            messages=[{"role": "user", "content": _REWRITE_PROMPT.format(q=question)}],
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=200,
         )
         text = resp.choices[0].message.content or ""
         lines = [re.sub(r"^\d+[\.、)]\s*", "", ln).strip() for ln in text.splitlines()]
         queries = [ln for ln in lines if ln]
+        standalone = queries[0] if (history_text and queries) else question
+        # 有历史时消解后的完整查询排首位；无历史保持原文优先
+        candidates = [*queries, question] if history_text else [question, *queries]
         merged: list[str] = []
-        for q in [question, *queries]:
+        for q in candidates:
             if q not in merged and len(merged) < 3:
                 merged.append(q)
-        return merged
+        return merged, standalone
     except Exception:  # noqa: BLE001  —— 降级
-        return [question]
+        return [question], question
 
 
 # ---- 节点 1：Query 理解 Agent ----
 def query_understand(state: AgentState) -> AgentState:
-    """意图识别 + Query 改写（多路召回）。达到循环上限时不改写，直接沿用（避免无限发散）。"""
-    state["rewritten_queries"] = rewrite_queries(state["query"])
+    """意图识别 + Query 改写（多路召回 + 指代消解）。达到循环上限时不改写，直接沿用（避免无限发散）。"""
+    queries, standalone = rewrite_queries(state["query"], state.get("history"))
+    state["rewritten_queries"] = queries
+    state["standalone_query"] = standalone
     return state
 
 
@@ -62,7 +96,8 @@ def retrieve(state: AgentState) -> AgentState:
     state["retrieval_results"] = retrieve_multi(
         state["rewritten_queries"], top_k=settings.TOP_K
     )
-    hit = graph_retriever.retrieve_graph(state["query"])
+    # 图谱实体查询对指代词敏感，追问时用消解后的独立问题
+    hit = graph_retriever.retrieve_graph(state.get("standalone_query") or state["query"])
     state["graph_context"] = hit["text"] if hit else ""
     return state
 
@@ -116,11 +151,10 @@ def retry(state: AgentState) -> AgentState:
 
 # ---- 节点 3：生成 Agent ----
 def generate(state: AgentState) -> AgentState:
-    """基于检索结果（向量 + 图谱）构造 Prompt，调用 DeepSeek 生成答案。"""
-    prompt = build_prompt(state)
+    """基于检索结果（向量 + 图谱）与多轮历史，调用 DeepSeek 生成答案。"""
     resp = get_client().chat.completions.create(
         model=settings.DEEPSEEK_MODEL,
-        messages=[{"role": "user", "content": prompt}],
+        messages=build_messages(state),
         temperature=0.3,
     )
     state["answer"] = resp.choices[0].message.content
@@ -178,9 +212,12 @@ def run(query: str) -> AgentState:
 
 # ---- 流式问答（接口层使用，避免等完整答案再返回）----
 
-def prepare(question: str) -> AgentState:
-    """理解 + 检索（同步执行，结果喂给 stream_generate）。流式链路不做评估循环。"""
-    state: AgentState = {"query": question, "loop_count": 0}
+def prepare(question: str, history: list[dict] | None = None) -> AgentState:
+    """理解 + 检索（同步执行，结果喂给 stream_generate）。流式链路不做评估循环。
+
+    history 为该会话最近若干轮 [{role, content}]，用于追问指代消解与多轮生成。
+    """
+    state: AgentState = {"query": question, "history": history or [], "loop_count": 0}
     query_understand(state)
     retrieve(state)
     return state
@@ -206,8 +243,21 @@ def detect_emergency(text: str) -> bool:
     return any(k in text for k in _EMERGENCY_KEYWORDS)
 
 
-def build_prompt(state: AgentState) -> str:
-    """构造生成 Prompt（与 generate 节点一致，含图谱上下文）。"""
+_SYSTEM_RULES = (
+    "你是一名鹅养殖疫病风险评估助手。请先判断问题类型：\n"
+    "1. 鹅养殖、疫病、症状、用药、免疫、生物安全等专业问题：必须仅根据下面的参考资料回答，"
+    "不要编造资料之外的内容；如果资料确实不足以回答，再明确说明。\n"
+    "2. 问候、闲聊、当前时间、使用帮助、常识等与专业知识无关的问题："
+    "不必依赖参考资料，直接用简洁友好的语气回答即可（当前系统时间：{now}）。\n"
+    "3. 若问题涉及急性传染病、家禽大批死亡等紧急疫情，回答开头必须先给出应急提示，"
+    "包含：立即隔离病鹅、病死禽不得随意丢弃或出售、尽快联系当地兽医或动物疫控部门。\n"
+    "回答请使用纯文本，不要使用 Markdown 格式（如 **、*、#、- 等符号），"
+    "直接以自然语句和数字序号表述。若用户追问上一轮提到的内容，请结合对话历史连贯作答。"
+)
+
+
+def build_messages(state: AgentState) -> list[dict]:
+    """构造多轮 chat messages：system（规则 + 参考资料）+ 最近历史 + 当前问题。"""
     blocks = [
         f"[来源：{r['metadata']['doc']}]\n{r['document']}" for r in state["retrieval_results"]
     ]
@@ -215,25 +265,25 @@ def build_prompt(state: AgentState) -> str:
         blocks.append(state["graph_context"])
     context = "\n\n".join(blocks)
     now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-    return (
-        "你是一名鹅养殖疫病风险评估助手。请先判断问题类型：\n"
-        "1. 鹅养殖、疫病、症状、用药、免疫、生物安全等专业问题：必须仅根据下面的参考资料回答，"
-        "不要编造资料之外的内容；如果资料确实不足以回答，再明确说明。\n"
-        "2. 问候、闲聊、当前时间、使用帮助、常识等与专业知识无关的问题："
-        "不必依赖参考资料，直接用简洁友好的语气回答即可（当前系统时间：" + now + "）。\n"
-        "3. 若问题涉及急性传染病、家禽大批死亡等紧急疫情，回答开头必须先给出应急提示，"
-        "包含：立即隔离病鹅、病死禽不得随意丢弃或出售、尽快联系当地兽医或动物疫控部门。\n"
-        "回答请使用纯文本，不要使用 Markdown 格式（如 **、*、#、- 等符号），"
-        "直接以自然语句和数字序号表述。\n\n"
-        f"参考资料：\n{context}\n\n问题：{state['query']}\n"
-    )
+    messages: list[dict] = [
+        {"role": "system", "content": _SYSTEM_RULES.format(now=now) + f"\n\n参考资料：\n{context}"}
+    ]
+    for h in state.get("history") or []:
+        content = (h.get("content") or "").strip()
+        if not content:
+            continue  # 纯图片消息等空内容跳过，避免出现空轮次
+        messages.append(
+            {"role": "user" if h.get("role") == "user" else "assistant", "content": content}
+        )
+    messages.append({"role": "user", "content": state["query"]})
+    return messages
 
 
 def stream_generate(state: AgentState):
     """流式调用 DeepSeek，逐 token 产出（LLM 开始返回即有首 token）。"""
     stream = get_client().chat.completions.create(
         model=settings.DEEPSEEK_MODEL,
-        messages=[{"role": "user", "content": build_prompt(state)}],
+        messages=build_messages(state),
         temperature=0.3,
         stream=True,
     )

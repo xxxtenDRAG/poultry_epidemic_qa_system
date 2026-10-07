@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 50
     TOP_K: int = 5
 
+    # 多轮对话：生成时携带的最近对话轮数（1 轮 = 用户问 + 助手答）与历史总字符上限
+    HISTORY_MAX_TURNS: int = 5
+    HISTORY_MAX_CHARS: int = 2000
+
     # ---- 阶段 3：知识图谱 + 评估循环 ----
     # 图谱数据文件路径；留空则用默认 <项目根>/data/knowledge_graph.json
     GRAPH_DATA_PATH: str = ""
