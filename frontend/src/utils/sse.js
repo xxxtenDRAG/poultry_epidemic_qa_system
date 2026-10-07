@@ -32,6 +32,7 @@ export async function streamChat(payload, { onToken, onDone, onError }) {
         const evt = JSON.parse(line.slice(6))
         if (evt.type === 'token') onToken?.(evt.content)
         else if (evt.type === 'done') onDone?.(evt.answer, evt.sources, evt.alert)
+        else if (evt.type === 'error') onError?.(evt.message || '服务异常，请稍后重试')
       }
     }
   } catch (e) {
