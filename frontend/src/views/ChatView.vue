@@ -2,6 +2,7 @@
 import { onMounted, ref, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture, Close, Download, Document, CopyDocument, Refresh, Loading } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
 import { api } from '../api'
 import { streamChat } from '../utils/sse'
 import assistantAvatar from '../assets/01-assistant-avatar.png'
@@ -10,6 +11,8 @@ import welcomeHero from '../assets/03-welcome-hero.png'
 import thinkingImg from '../assets/04-thinking.png'
 
 const sessions = ref([])
+// 历史页可带 ?topic=<维度id> / ?session=<会话id> 跳进来
+const route = useRoute()
 const currentId = ref(null)
 const currentTitle = ref('新会话')
 const messages = ref([]) // { role, content, sources }
@@ -53,13 +56,13 @@ function seededRandom(seed) {
   }
 }
 
-function shufflePick(rand) {
-  const pool = [...QUICK_QUESTION_POOL]
-  for (let i = pool.length - 1; i > 0; i--) {
+function shufflePick(rand, pool = QUICK_QUESTION_POOL) {
+  const picked = [...pool]
+  for (let i = picked.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1))
-    ;[pool[i], pool[j]] = [pool[j], pool[i]]
+    ;[picked[i], picked[j]] = [picked[j], picked[i]]
   }
-  return pool.slice(0, Math.min(QUICK_SHOW_COUNT, pool.length))
+  return picked.slice(0, Math.min(QUICK_SHOW_COUNT, picked.length))
 }
 
 function currentDayNumber() {
@@ -69,9 +72,20 @@ function currentDayNumber() {
 
 const quickQuestions = ref(shufflePick(seededRandom(currentDayNumber())))
 
+// 当前提问维度（历史页「按维度提问」跳转时设置）；为空表示用默认随机池
+const topicInfo = ref(null)
+
 // 手动换一批：完全随机，仅影响当前页面展示
 function refreshQuickQuestions() {
-  quickQuestions.value = shufflePick(Math.random)
+  quickQuestions.value = topicInfo.value
+    ? shufflePick(Math.random, topicInfo.value.questions)
+    : shufflePick(Math.random)
+}
+
+// 退出维度模式，回到默认问题池
+function clearTopic() {
+  topicInfo.value = null
+  quickQuestions.value = shufflePick(seededRandom(currentDayNumber()))
 }
 
 // 急症预警关键词（与后端 _EMERGENCY_KEYWORDS 保持一致，用于历史消息恢复警示标志）
@@ -369,8 +383,24 @@ async function send() {
 }
 
 onMounted(async () => {
+  // 历史页带维度进来时，快捷提问锁定为该维度的问题模板
+  const topicId = String(route.query.topic || '')
+  if (topicId) {
+    try {
+      const overview = await api.sessions.overview()
+      const dimension = (overview.dimensions || []).find((d) => d.id === topicId)
+      if (dimension) {
+        topicInfo.value = dimension
+        quickQuestions.value = shufflePick(Math.random, dimension.questions)
+      }
+    } catch (_) {
+      // 取不到维度信息就退回默认随机池，不影响正常提问
+    }
+  }
   await refreshSessions()
-  if (sessions.value.length) await loadSession(sessions.value[0].id)
+  const wanted = Number(route.query.session)
+  if (wanted && sessions.value.some((s) => s.id === wanted)) await loadSession(wanted)
+  else if (sessions.value.length) await loadSession(sessions.value[0].id)
 })
 </script>
 
@@ -412,6 +442,9 @@ onMounted(async () => {
           <img :src="welcomeHero" class="welcome-img" alt="鹅医生" />
           <p class="welcome-text">输入下方问题，开始鹅养殖疫病咨询</p>
           <div class="quick-questions">
+            <el-tag v-if="topicInfo" class="topic-chip" size="large" closable @close="clearTopic">
+              维度：{{ topicInfo.label }}
+            </el-tag>
             <el-tag
               v-for="(q, i) in quickQuestions"
               :key="q"
@@ -532,6 +565,12 @@ onMounted(async () => {
 .quick-tag:hover {
   background: #1f6f54; color: #fff; border-color: #1f6f54;
   transform: translateY(-2px); box-shadow: 0 4px 12px rgba(31, 111, 84, 0.25);
+}
+
+/* 维度标签：从历史页按维度提问进入时显示 */
+.topic-chip {
+  background: #eaf5f0; border-color: #1f6f54; color: #1f6f54;
+  height: auto; padding: 10px 18px; border-radius: 20px; font-size: 14px;
 }
 
 /* 换一批按钮 */
