@@ -18,6 +18,17 @@ class EmptyDocumentError(ValueError):
 
 def prepare_document(file_path: str | Path) -> dict:
     """解析 → 分块 → 向量化，返回 {chars, chunks, embeddings}，不写向量库。"""
+    prepared = chunk_document(file_path)
+    prepared["embeddings"] = embed_texts(prepared["chunks"])
+    return prepared
+
+
+def chunk_document(file_path: str | Path) -> dict:
+    """解析 → 分块，返回 {chars, chunks}，不做向量化。
+
+    供「本地知识库补录」先比对块数：块数与库中一致就跳过重新 embedding，
+    500+ 块的大文档能省下几十秒 CPU。
+    """
     file_path = Path(file_path)
     suffix = file_path.suffix.lower()
 
@@ -34,8 +45,7 @@ def prepare_document(file_path: str | Path) -> dict:
     if not chunks:
         raise EmptyDocumentError("文档分块结果为空，请检查文档内容")
 
-    embeddings = embed_texts(chunks)
-    return {"chars": len(text), "chunks": chunks, "embeddings": embeddings}
+    return {"chars": len(text), "chunks": chunks}
 
 
 def commit_document(doc_name: str, prepared: dict) -> None:

@@ -11,10 +11,21 @@ COLLECTION_NAME = "goose_knowledge"
 
 @lru_cache(maxsize=1)
 def get_collection():
-    persist_dir = Path(settings.CHROMA_PERSIST_DIR)
-    persist_dir.mkdir(parents=True, exist_ok=True)
-    client = chromadb.PersistentClient(path=str(persist_dir))
+    client = chromadb.PersistentClient(path=str(_persist_dir()))
     return client.get_or_create_collection(COLLECTION_NAME)
+
+
+def _persist_dir() -> Path:
+    """向量库目录：配置为相对路径时统一按 backend/ 解析。
+
+    否则工作目录一变（从项目根启动、IDE 直接运行、离线脚本）就会连到另一个空库，
+    出现「MySQL 里有文档、向量库却查不到」的假象。
+    """
+    path = Path(settings.CHROMA_PERSIST_DIR)
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parents[1] / path
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def add_documents(
@@ -83,3 +94,42 @@ def delete_by_doc(doc_name: str) -> int:
     if ids:
         col.delete(ids=ids)
     return len(ids)
+
+
+def list_doc_chunks() -> dict[str, int]:
+    """向量库中每个文档的块数：{doc 键: 块数}（用于核对文档列表与向量库是否一致）。"""
+    col = get_collection()
+    rows = col.get(include=["metadatas"])
+    counter: dict[str, int] = {}
+    for meta in rows["metadatas"]:
+        key = (meta or {}).get("doc")
+        if key:
+            counter[key] = counter.get(key, 0) + 1
+    return counter
+
+
+def get_chunks(doc_name: str, keyword: str = "") -> list[dict]:
+    """取某文档的全部块（按块号升序），keyword 非空时只保留内容包含它的块。"""
+    col = get_collection()
+    rows = col.get(where={"doc": doc_name}, include=["documents", "metadatas"])
+    items = [
+        {
+            "index": int((meta or {}).get("index", 0)),
+            "text": text,
+            "chars": len(text),
+        }
+        for text, meta in zip(rows["documents"], rows["metadatas"])
+        if not keyword or keyword in text
+    ]
+    items.sort(key=lambda item: item["index"])
+    return items
+
+
+def list_chunks() -> list[tuple[str, str]]:
+    """取出全部知识块 (doc 键, 文本)，供知识库维度覆盖度统计使用（一次查询拿全）。"""
+    col = get_collection()
+    rows = col.get(include=["documents", "metadatas"])
+    return [
+        ((meta or {}).get("doc", ""), text)
+        for text, meta in zip(rows["documents"], rows["metadatas"])
+    ]
