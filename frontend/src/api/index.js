@@ -45,5 +45,36 @@ export const api = {
     search: (keyword, limit = 10) =>
       request.get('/graph/search', { params: { keyword, limit } }),
     full: (type = '') => request.get('/graph/full', { params: { type } })
+  },
+  // ---- 全链路溯源 ----
+  traceability: {
+    // 概览：批次/存栏/销售/告警/平均完整度/今日巡栏进度
+    overview: () => request.get('/traceability/overview'),
+    // 九环节字典：孵化、育雏、生长、防疫、出栏、屠宰、质检、冷链、销售
+    stages: () => request.get('/traceability/stages'),
+    // 批次列表（含当前环节、风险、链路完整度、今日是否已记录）
+    batches: () => request.get('/traceability/batches'),
+    // 新建批次（养殖场建档）
+    createBatch: (payload) => request.post('/traceability/batches', payload),
+    // 编辑批次基础信息
+    updateBatch: (batchNo, payload) =>
+      request.patch(`/traceability/batches/${encodeURIComponent(batchNo)}`, payload),
+    // 批次详情：基础信息 + 九环节状态 + 全部追溯事件
+    detail: (batchNo) =>
+      request.get(`/traceability/batches/${encodeURIComponent(batchNo)}`),
+    // 登记一条追溯事件
+    addEvent: (batchNo, payload) =>
+      request.post(`/traceability/batches/${encodeURIComponent(batchNo)}/events`, payload),
+    // 日常巡栏记录（最新在前）
+    dailyRecords: (batchNo, limit = 30) =>
+      request.get(`/traceability/batches/${encodeURIComponent(batchNo)}/daily-records`, {
+        params: { limit }
+      }),
+    // 记一笔日常：死淘会同步扣减存栏
+    addDailyRecord: (batchNo, payload) =>
+      request.post(
+        `/traceability/batches/${encodeURIComponent(batchNo)}/daily-records`,
+        payload
+      )
   }
 }

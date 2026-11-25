@@ -5,9 +5,9 @@ import { Picture, Close, Download, Document, CopyDocument, Refresh, Loading } fr
 import { useRoute } from 'vue-router'
 import { api } from '../api'
 import { streamChat } from '../utils/sse'
-import assistantAvatar from '../assets/01-assistant-avatar.png'
+import assistantAvatar from '../assets/goose-avatar.png'
 import userAvatar from '../assets/02-user-avatar.png'
-import welcomeHero from '../assets/03-welcome-hero.png'
+import welcomeHero from '../assets/goose-hero.png'
 import thinkingImg from '../assets/04-thinking.png'
 
 const sessions = ref([])

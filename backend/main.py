@@ -14,8 +14,9 @@ from fastapi.staticfiles import StaticFiles
 
 from core.config import settings
 from core.exceptions import register_exception_handlers
-from api import chat, documents, graph, sessions
+from api import chat, documents, graph, sessions, traceability
 from db.init_db import init_db
+from db.seed_traceability import seed_traceability
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -36,8 +37,9 @@ def _warmup_reranker() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """启动时自动建库建表，并后台预热向量模型与精排模型。"""
+    """启动时自动建库建表、写入演示溯源数据，并后台预热向量模型与精排模型。"""
     init_db()
+    seed_traceability()
     loop = asyncio.get_running_loop()
     loop.create_task(anyio.to_thread.run_sync(_warmup_embedder))
     loop.create_task(anyio.to_thread.run_sync(_warmup_reranker))
@@ -68,6 +70,7 @@ app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(graph.router, prefix="/api", tags=["graph"])
 app.include_router(sessions.router, prefix="/api", tags=["sessions"])
+app.include_router(traceability.router, prefix="/api", tags=["traceability"])
 
 # 挂载上传图片静态目录
 _uploads_dir = BASE_DIR / "data" / "uploads"
