@@ -81,7 +81,64 @@
 - `GET /api/graph/overview` → `{ "node_count", "edge_count", "community_count", "communities": [{ "id", "size" }] }`
   - 图谱规模与社区统计（前端图谱页概览用）
 
-## 6. 对话链路说明（阶段 3）
+## 6. 养殖批次、日常巡栏与全链路溯源 ✅
+
+阶段字典见 `backend/core/trace_stages.py`：孵化/鹅苗、育雏、生长育成、防疫与健康、出栏检疫、屠宰加工、质检分级、冷链物流、终端销售。
+
+### 6.1 批次
+
+- `GET /api/traceability/stages` — 九环节字典
+  - `[{ "key", "name", "short", "color", "description" }]`
+- `GET /api/traceability/overview` — 养殖/溯源概览
+  - `{ "batch_count", "raising_count", "processing_count", "sold_count", "total_quantity", "alive_quantity", "alert_count", "avg_completeness", "daily_record_count", "today_recorded_count", "today_missing_count", "today_mortality", "last_record_at" }`
+  - `today_recorded_count` / `today_missing_count` 只统计 `growing` / `ready` 批次
+- `GET /api/traceability/batches` — 批次列表（含今日是否巡栏）
+  - 每项：`{ "batch_no", "farm_name", "breed", "house_no", "hatch_date", "entry_date", "quantity", "current_quantity", "status", "current_stage", "current_stage_name", "risk_level", "age_days", "completeness", "stages": [{ "key", "name", "short", "color", "status", "event_count", "last_time" }], "trace_code", "last_event_time", "alerts": [], "daily_record_count", "last_record_date", "mortality_total", "culling_total", "today_recorded" }`
+  - `status`：`growing / ready / processing / sold`；`stages[].status`：`done / current / pending`
+- `POST /api/traceability/batches` — 新建批次（养殖场建档）
+  - 请求体：`{ "batch_no", "farm_name", "breed": 可选, "house_no": 可选, "hatch_date", "entry_date": 可选, "quantity": >0, "current_quantity": 可选, "status": 可选, "current_stage": 可选, "risk_level": 可选 }`
+  - 批次号重复返回 `409`；`current_quantity` 缺省等于 `quantity`
+  - 返回：批次摘要（同列表项）
+- `PATCH /api/traceability/batches/{batch_no}` — 编辑批次基础信息
+  - 请求体为上述字段的任意子集；未知环节 / 状态 / 风险返回 `400`
+
+### 6.2 日常巡栏记录
+
+- `GET /api/traceability/batches/{batch_no}/daily-records?limit=30` — 最近记录（最新在前，`limit` 1-100）
+- `POST /api/traceability/batches/{batch_no}/daily-records` — 记一笔日常
+  - 请求体：
+
+    | 字段 | 类型 | 说明 |
+    |------|------|------|
+    | `record_date` | datetime 可选 | 默认当前时间 |
+    | `mortality` | int ≥0 | 死亡羽数 |
+    | `culling` | int ≥0 | 淘汰羽数 |
+    | `feed_kg` | float ≥0 | 采食量 |
+    | `water_l` | float ≥0 | 饮水量 |
+    | `temperature` | float 可选 | 舍内温度 |
+    | `humidity` | float 可选 | 舍内湿度 |
+    | `symptoms` | string | 异常表现（如精神沉郁、粪便异常） |
+    | `action` | string | 处置措施（隔离、消毒、联系兽医等） |
+    | `note` | string | 备注 |
+    | `created_by` | string | 记录人 |
+
+  - 副作用：写入 `farm_daily_record`，按 `record_date - hatch_date` 计算 `age_days`，并把 `current_quantity` 扣减 `mortality + culling`（不低于 0）
+  - 返回：新记录对象 `{ "id", "record_date", "age_days", "mortality", "culling", "feed_kg", "water_l", "temperature", "humidity", "symptoms", "action", "note", "created_by", "created_at" }`
+
+### 6.3 追溯事件与详情
+
+- `GET /api/traceability/batches/{batch_no}` — 批次详情
+  - `{ "batch": 同上, "events": [{ "id", "stage", "stage_name", "stage_color", "title", "event_time", "location", "operator", "detail", "evidence", "status", "sequence" }], "daily_records": [最近 30 条日常记录] }`
+- `POST /api/traceability/batches/{batch_no}/events` — 登记追溯事件
+  - 请求体：`{ "stage", "title", "event_time": 可选, "location": 可选, "operator": 可选, "detail": 可选对象, "evidence": 可选字符串数组, "status": 可选 }`
+  - 副作用：写入 `trace_event`，同步批次 `current_stage`；`outbound→ready`，`slaughter/quality/coldchain→processing`，`sales→sold`，其余→`growing`
+  - 返回：新事件对象
+
+### 6.4 数据表
+
+`trace_batch`（批次）、`trace_event`（追溯事件）、`farm_daily_record`（日常巡栏记录，批次级联删除）。首次启动且 `trace_batch` 为空时自动写入 4 个演示批次及近几日巡栏记录。
+
+## 7. 对话链路说明（阶段 3）
 
 - 检索为双通道：向量召回（多 Query + bge-reranker 精排） + 知识图谱子图（实体命中时）
 - 图谱通道空 / 未命中实体 → 自动跳过，不影响主链路
@@ -89,6 +146,6 @@
   任一 < 3 且循环次数 < `EVAL_MAX_LOOPS` 时改写 Query 重检索；`EVAL_LOOP_ENABLED=false`
   时跳过评估直接出答案（降级）。SSE 流式链路（`prepare`→`stream_generate`）不做循环。
 
-## 7. TODO
+## 8. TODO
 
 - [ ] 流式对话的中途取消 / 断流重连（阶段 3）
