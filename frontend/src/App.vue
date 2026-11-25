@@ -51,8 +51,8 @@ import historyIcon from './assets/08-session-history.png'
 .header { background: #1f6f54; color: #fff; display: flex; align-items: center; gap: 10px; }
 .header-icon { width: 36px; height: 36px; border-radius: 9px; object-fit: cover; background: #f7fbf8; }
 .title { font-size: 18px; margin: 0; }
-.mobile-entry { color: #fff; margin-left: auto; opacity: .92; }
-.mobile-entry:hover { color: #fff; opacity: 1; background: rgba(255, 255, 255, .12); }
+.header .mobile-entry { color: #fff; margin-left: auto; opacity: .92; }
+.header .mobile-entry:hover { color: #fff; opacity: 1; background: rgba(255, 255, 255, .12); }
 .aside { border-right: 1px solid #e4e7ed; }
 .aside .el-menu-item { display: flex; align-items: center; gap: 8px; }
 .menu-icon { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #fff; }
