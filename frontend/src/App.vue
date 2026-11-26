@@ -33,6 +33,10 @@ import historyIcon from './assets/08-session-history.png'
             <el-icon class="menu-el-icon"><Connection /></el-icon>
             <span>全链路溯源</span>
           </el-menu-item>
+          <el-menu-item index="/weather">
+            <el-icon class="menu-el-icon"><Sunny /></el-icon>
+            <span>天气预警</span>
+          </el-menu-item>
           <el-menu-item index="/history">
             <img :src="historyIcon" class="menu-icon" alt="" />
             <span>会话历史</span>
@@ -48,14 +52,40 @@ import historyIcon from './assets/08-session-history.png'
 
 <style>
 .layout { height: 100vh; }
-.header { background: #1f6f54; color: #fff; display: flex; align-items: center; gap: 10px; }
-.header-icon { width: 36px; height: 36px; border-radius: 9px; object-fit: cover; background: #f7fbf8; }
-.title { font-size: 18px; margin: 0; }
-.header .mobile-entry { color: #fff; margin-left: auto; opacity: .92; }
-.header .mobile-entry:hover { color: #fff; opacity: 1; background: rgba(255, 255, 255, .12); }
-.aside { border-right: 1px solid #e4e7ed; }
-.aside .el-menu-item { display: flex; align-items: center; gap: 8px; }
-.menu-icon { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #fff; }
-.menu-el-icon { width: 24px; height: 24px; font-size: 20px; color: #1f6f54; }
-.main { background: #f5f7fa; }
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 22px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #dde5da;
+  color: #17231b;
+}
+.header-icon { width: 34px; height: 34px; border-radius: 10px; object-fit: cover; background: #f4f7f1; }
+.title { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; margin: 0; color: #17231b; }
+.header .mobile-entry { color: #23704a; margin-left: auto; font-weight: 500; }
+.header .mobile-entry:hover { color: #1a5638; background: #e1f2e6; }
+.aside {
+  background: #fff;
+  border-right: 1px solid #dde5da;
+  padding: 14px 10px;
+}
+.aside .el-menu { border-right: none; background: transparent; }
+.aside .el-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  margin-bottom: 4px;
+  padding: 0 12px !important;
+  border-radius: 12px;
+  color: #68776d;
+  font-size: 13px;
+}
+.aside .el-menu-item:hover { background: #f4f7f1; color: #17231b; }
+.aside .el-menu-item.is-active { background: #e1f2e6; color: #23704a; font-weight: 600; }
+.menu-icon { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; background: #fff; }
+.menu-el-icon { width: 22px; height: 22px; font-size: 18px; color: #23704a; }
 </style>

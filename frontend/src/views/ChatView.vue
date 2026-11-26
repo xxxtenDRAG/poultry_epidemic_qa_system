@@ -156,11 +156,11 @@ function printHtmlShell(title, date, bodyHtml) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
 <style>
   body { font-family: "Microsoft YaHei", sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-  h1 { color: #1f6f54; border-bottom: 2px solid #1f6f54; padding-bottom: 10px; }
+  h1 { color: #23704a; border-bottom: 2px solid #23704a; padding-bottom: 10px; }
   .meta { color: #909399; font-size: 14px; margin-bottom: 30px; }
   .msg { margin-bottom: 20px; padding: 15px; border-radius: 8px; page-break-inside: avoid; }
-  .user { background: #e6f4ec; border-left: 4px solid #1f6f54; }
-  .assistant { background: #f5f7fa; border-left: 4px solid #909399; }
+  .user { background: #e6f4ec; border-left: 4px solid #23704a; }
+  .assistant { background: #f4f7f1; border-left: 4px solid #909399; }
   .role { font-weight: bold; margin-bottom: 8px; }
   .content { line-height: 1.8; white-space: pre-wrap; }
   .sources { margin-top: 10px; font-size: 13px; color: #606266; }
@@ -527,14 +527,14 @@ onMounted(async () => {
 <style scoped>
 /* 高度 = 视口 - 顶部标题栏(60px) - el-main 上下内边距(40px)，确保消息区内部滚动、输入框固定底部 */
 .chat-wrap { display: flex; height: calc(100vh - 100px); }
-.side { width: 220px; border-right: 1px solid #e4e7ed; padding: 12px; background: #fff; }
+.side { width: 220px; border-right: 1px solid #dde5da; padding: 12px; background: #fff; }
 .side-list { height: calc(100% - 48px); margin-top: 10px; }
 .side-item {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 4px;
+  padding: 8px 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px;
 }
-.side-item:hover { background: #f5f7fa; }
-.side-item.active { background: #e6f4ec; }
+.side-item:hover { background: #f4f7f1; }
+.side-item.active { background: #e1f2e6; }
 .side-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .side-del { visibility: hidden; }
 .side-item:hover .side-del { visibility: visible; }
@@ -543,9 +543,9 @@ onMounted(async () => {
 /* 对话头部 */
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 20px; border-bottom: 1px solid #e4e7ed; background: #fff;
+  padding: 12px 20px; border-bottom: 1px solid #dde5da; background: #fff;
 }
-.chat-title { font-weight: 600; color: #303133; }
+.chat-title { font-weight: 600; color: #17231b; }
 .chat-actions { display: flex; gap: 8px; }
 
 .msg-list { flex: 1; min-height: 0; overflow-y: auto; padding: 20px; }
@@ -559,17 +559,17 @@ onMounted(async () => {
 .quick-questions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 24px; max-width: 640px; }
 .quick-tag {
   cursor: pointer; padding: 10px 18px; border-radius: 20px;
-  background: #fff; border: 1px solid #e4e7ed; color: #1f6f54;
+  background: #fff; border: 1px solid #dde5da; color: #23704a;
   font-size: 14px; transition: all 0.3s ease;
 }
 .quick-tag:hover {
-  background: #1f6f54; color: #fff; border-color: #1f6f54;
+  background: #23704a; color: #fff; border-color: #23704a;
   transform: translateY(-2px); box-shadow: 0 4px 12px rgba(31, 111, 84, 0.25);
 }
 
 /* 维度标签：从历史页按维度提问进入时显示 */
 .topic-chip {
-  background: #eaf5f0; border-color: #1f6f54; color: #1f6f54;
+  background: #eaf5f0; border-color: #23704a; color: #23704a;
   height: auto; padding: 10px 18px; border-radius: 20px; font-size: 14px;
 }
 
@@ -596,23 +596,23 @@ onMounted(async () => {
 .msg-row { display: flex; margin-bottom: 16px; }
 .msg-row.user { justify-content: flex-end; }
 .msg-row.assistant { justify-content: flex-start; }
-.bubble { max-width: 70%; padding: 10px 14px; border-radius: 8px; line-height: 1.7; }
-.msg-row.user .bubble { background: #1f6f54; color: #fff; }
-.msg-row.assistant .bubble { background: #fff; border: 1px solid #e4e7ed; }
+.bubble { max-width: 70%; padding: 11px 15px; border-radius: 14px; line-height: 1.7; }
+.msg-row.user .bubble { background: #23704a; color: #fff; border-bottom-right-radius: 4px; }
+.msg-row.assistant .bubble { background: #fff; border: 1px solid #dde5da; border-bottom-left-radius: 4px; box-shadow: 0 6px 18px rgba(28, 53, 34, 0.06); }
 .bubble-text { white-space: pre-wrap; word-break: break-word; }
 .sources { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
-.input-bar { display: flex; gap: 12px; padding: 12px 20px; background: #fff; border-top: 1px solid #e4e7ed; }
+.input-bar { display: flex; gap: 12px; padding: 12px 20px; background: #fff; border-top: 1px solid #dde5da; }
 .input-bar .el-textarea { flex: 1; }
 
 /* 待发送图片预览栏 */
 .img-preview-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
-  padding: 10px 20px; background: #f8faf9; border-top: 1px solid #e4e7ed;
+  padding: 10px 20px; background: #f8faf9; border-top: 1px solid #dde5da;
 }
 .img-preview-item { position: relative; }
 .img-preview {
   width: 72px; height: 72px; object-fit: cover; display: block;
-  border-radius: 8px; border: 1px solid #e4e7ed; background: #f5f7fa;
+  border-radius: 8px; border: 1px solid #dde5da; background: #f4f7f1;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 /* 上传中遮罩 */
@@ -620,7 +620,7 @@ onMounted(async () => {
   position: absolute; inset: 0; border-radius: 8px;
   background: rgba(255, 255, 255, 0.65);
   display: flex; align-items: center; justify-content: center;
-  color: #1f6f54; font-size: 18px;
+  color: #23704a; font-size: 18px;
 }
 /* 删除按钮：悬浮于缩略图右上角的深色圆点 */
 .img-preview-item .img-del {
@@ -636,7 +636,7 @@ onMounted(async () => {
 /* 已选数量提示 */
 .img-count { font-size: 12px; color: #a8abb2; margin-left: 2px; user-select: none; }
 .img-upload-btn { cursor: pointer; padding: 8px; color: #606266; }
-.img-upload-btn:hover { color: #1f6f54; }
+.img-upload-btn:hover { color: #23704a; }
 
 /* 消息气泡内多图：等比缩略图网格排布 */
 .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -664,7 +664,7 @@ onMounted(async () => {
 .disclaimer {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px dashed #e4e7ed;
+  border-top: 1px dashed #dde5da;
   font-size: 12px;
   color: #a8abb2;
   line-height: 1.5;
@@ -685,5 +685,5 @@ onMounted(async () => {
   color: #909399;
   transition: color 0.2s ease;
 }
-.msg-action-icon:hover { color: #1f6f54; }
+.msg-action-icon:hover { color: #23704a; }
 </style>

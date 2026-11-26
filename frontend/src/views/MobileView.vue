@@ -8,6 +8,7 @@ import {
   Clock,
   Connection,
   Refresh,
+  Sunny,
   WarningFilled
 } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
@@ -23,6 +24,7 @@ const batches = ref([])
 const trends = ref({})
 const filter = ref('all')
 const quickSubmitting = ref('')
+const weatherBrief = ref(null)
 
 const statusText = { raising: '在养', growing: '在养', processing: '待出栏', sold: '已售出' }
 const riskText = { low: '低风险', medium: '中风险', high: '高风险' }
@@ -165,7 +167,19 @@ async function quickNormal(batch) {
   }
 }
 
-onMounted(load)
+async function loadWeatherBrief() {
+  try {
+    const list = await api.weather.farms()
+    weatherBrief.value = list[0] || null
+  } catch {
+    weatherBrief.value = null
+  }
+}
+
+onMounted(() => {
+  load()
+  loadWeatherBrief()
+})
 </script>
 
 <template>
@@ -240,6 +254,16 @@ onMounted(load)
           <b>历史</b><small>会话回看</small>
         </button>
       </section>
+
+      <button v-if="weatherBrief" type="button" class="mv-weather" @click="router.push('/m/weather')">
+        <span class="mv-weather-icon"><el-icon><Sunny /></el-icon></span>
+        <span class="mv-weather-body">
+          <b>{{ weatherBrief.city }} {{ weatherBrief.current?.temp ?? '—' }}℃ {{ weatherBrief.current?.text }}</b>
+          <small>{{ weatherBrief.summary }}</small>
+        </span>
+        <span class="m-pill" :class="weatherBrief.level">{{ weatherBrief.label }}</span>
+        <el-icon class="mv-alert-arrow"><ArrowRight /></el-icon>
+      </button>
 
       <section class="mv-overview m-card">
         <div>
@@ -425,6 +449,19 @@ onMounted(load)
 .mv-alert-body b { font-size: 12px; color: #8b5413; }
 .mv-alert-body small { font-size: 10px; color: #a98250; }
 .mv-alert-arrow { color: #b98a4a; }
+.mv-weather {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px;
+  padding: 11px 12px; border: 1px solid #dde5da; border-radius: 16px;
+  background: #fff; text-align: left;
+}
+.mv-weather-icon {
+  display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto;
+  border-radius: 11px; background: #fff0d7; color: #a96312; font-size: 17px;
+}
+.mv-weather-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mv-weather-body b { font-size: 12px; color: #17231b; }
+.mv-weather-body small { font-size: 10px; color: #909399; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-weather .m-pill { flex: 0 0 auto; }
 .mv-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
 .mv-quick button {
   display: flex; flex-direction: column; align-items: center; gap: 5px;

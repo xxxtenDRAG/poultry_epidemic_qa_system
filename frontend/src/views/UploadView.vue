@@ -494,7 +494,7 @@ onMounted(loadAll)
             :percentage="percentOf(item)"
             :show-text="false"
             :stroke-width="8"
-            :color="item.thin ? '#e6a23c' : '#1f6f54'"
+            :color="item.thin ? '#e6a23c' : '#23704a'"
           />
         </div>
       </div>
@@ -587,7 +587,7 @@ onMounted(loadAll)
 .stat-row { margin-bottom: 16px; }
 .stat-card { text-align: center; }
 .stat-label { color: #909399; font-size: 13px; }
-.stat-value { font-size: 26px; font-weight: 600; color: #1f6f54; }
+.stat-value { font-size: 26px; font-weight: 600; color: #23704a; }
 .stat-value.small { font-size: 15px; line-height: 38px; }
 .stat-tip { color: #c0c4cc; font-size: 12px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

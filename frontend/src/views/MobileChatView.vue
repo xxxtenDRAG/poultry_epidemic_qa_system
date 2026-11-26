@@ -291,7 +291,12 @@ async function send() {
   scrollToBottom()
 
   await streamChat(
-    { session_id: currentId.value, question: text, image_urls: imageUrls },
+    {
+      session_id: currentId.value,
+      question: text,
+      image_urls: imageUrls,
+      batch_no: route.query.batch ? String(route.query.batch) : null
+    },
     {
       onToken: (token) => {
         assistant.content += token

@@ -212,12 +212,18 @@ def run(query: str) -> AgentState:
 
 # ---- 流式问答（接口层使用，避免等完整答案再返回）----
 
-def prepare(question: str, history: list[dict] | None = None) -> AgentState:
+def prepare(question: str, history: list[dict] | None = None, weather_context: str = "") -> AgentState:
     """理解 + 检索（同步执行，结果喂给 stream_generate）。流式链路不做评估循环。
 
-    history 为该会话最近若干轮 [{role, content}]，用于追问指代消解与多轮生成。
+    history 为该会话最近若干轮 [{role, content}]，用于追问指代消解与多轮生成；
+    weather_context 为场区天气与风险文本，非空时注入生成提示词，让建议与天气联动。
     """
-    state: AgentState = {"query": question, "history": history or [], "loop_count": 0}
+    state: AgentState = {
+        "query": question,
+        "history": history or [],
+        "loop_count": 0,
+        "weather_context": weather_context,
+    }
     query_understand(state)
     retrieve(state)
     return state
@@ -251,6 +257,8 @@ _SYSTEM_RULES = (
     "不必依赖参考资料，直接用简洁友好的语气回答即可（当前系统时间：{now}）。\n"
     "3. 若问题涉及急性传染病、家禽大批死亡等紧急疫情，回答开头必须先给出应急提示，"
     "包含：立即隔离病鹅、病死禽不得随意丢弃或出售、尽快联系当地兽医或动物疫控部门。\n"
+    "4. 若下方提供了「场区天气与风险」，回答防控建议时应结合近期天气给出针对性提醒"
+    "（如降温注意保温、降雨高湿防球虫），但不要生硬复述天气数据。\n"
     "回答请使用纯文本，不要使用 Markdown 格式（如 **、*、#、- 等符号），"
     "直接以自然语句和数字序号表述。若用户追问上一轮提到的内容，请结合对话历史连贯作答。"
 )
@@ -265,8 +273,11 @@ def build_messages(state: AgentState) -> list[dict]:
         blocks.append(state["graph_context"])
     context = "\n\n".join(blocks)
     now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    weather_block = ""
+    if state.get("weather_context"):
+        weather_block = f"\n\n场区天气与风险：\n{state['weather_context']}"
     messages: list[dict] = [
-        {"role": "system", "content": _SYSTEM_RULES.format(now=now) + f"\n\n参考资料：\n{context}"}
+        {"role": "system", "content": _SYSTEM_RULES.format(now=now) + weather_block + f"\n\n参考资料：\n{context}"}
     ]
     for h in state.get("history") or []:
         content = (h.get("content") or "").strip()

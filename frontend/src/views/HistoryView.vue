@@ -361,7 +361,7 @@ onMounted(load)
 .stat-row { margin-bottom: 16px; }
 .stat-card { text-align: center; }
 .stat-label { color: #909399; font-size: 13px; }
-.stat-value { font-size: 26px; font-weight: 600; color: #1f6f54; }
+.stat-value { font-size: 26px; font-weight: 600; color: #23704a; }
 .stat-tip { color: #c0c4cc; font-size: 12px; }
 .columns { display: flex; gap: 16px; align-items: flex-start; }
 .list-card { width: 420px; flex-shrink: 0; }
@@ -379,14 +379,14 @@ onMounted(load)
 .session-item.active { background: #eaf5f0; }
 .session-main { flex: 1; min-width: 0; cursor: pointer; }
 .session-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-title:hover { color: #1f6f54; }
+.session-title:hover { color: #23704a; }
 .session-meta { display: flex; gap: 10px; color: #909399; font-size: 12px; margin: 2px 0; }
 .session-topics { display: flex; flex-wrap: wrap; gap: 4px; }
 .mini-tag { margin-right: 4px; }
 .detail-meta { display: flex; gap: 16px; color: #909399; font-size: 12px; margin-bottom: 8px; }
 .detail-topics { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
-.history-msg { margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: #f5f7fa; }
-.history-msg.user { border-left: 3px solid #1f6f54; }
+.history-msg { margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: #f4f7f1; }
+.history-msg.user { border-left: 3px solid #23704a; }
 .history-msg.assistant { border-left: 3px solid #67c23a; }
 .msg-label { font-size: 12px; color: #909399; margin-bottom: 4px; }
 .msg-content { white-space: pre-wrap; word-break: break-word; line-height: 1.7; }

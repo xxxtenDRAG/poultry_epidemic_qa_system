@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core.config import settings
 from core.exceptions import register_exception_handlers
-from api import chat, documents, graph, sessions, traceability
+from api import chat, documents, graph, sessions, traceability, weather
 from db.init_db import init_db
 from db.seed_traceability import seed_traceability
 
@@ -71,6 +71,7 @@ app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(graph.router, prefix="/api", tags=["graph"])
 app.include_router(sessions.router, prefix="/api", tags=["sessions"])
 app.include_router(traceability.router, prefix="/api", tags=["traceability"])
+app.include_router(weather.router, prefix="/api", tags=["weather"])
 
 # 挂载上传图片静态目录
 _uploads_dir = BASE_DIR / "data" / "uploads"

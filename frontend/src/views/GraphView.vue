@@ -172,7 +172,7 @@ function render() {
     ...n,
     itemStyle: {
       color: typeColors[n.type] || '#909399',
-      borderColor: n.id === center ? '#1f6f54' : '#ffffff',
+      borderColor: n.id === center ? '#23704a' : '#ffffff',
       borderWidth: n.id === center ? 3 : 1
     }
   }))
@@ -366,13 +366,13 @@ onBeforeUnmount(() => {
 .miss-chip { display: inline-flex; align-items: center; gap: 6px; }
 .detail-loading { text-align: center; padding: 40px; color: #909399; }
 .relation-list { display: flex; flex-direction: column; gap: 8px; }
-.relation-item { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: #f5f7fa; }
+.relation-item { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: #f4f7f1; }
 .rel-name { font-weight: 500; color: #303133; }
-.rel-target { color: #1f6f54; font-weight: 600; }
+.rel-target { color: #23704a; font-weight: 600; }
 .rel-type { margin-left: auto; }
 .legend { display: flex; flex-direction: column; gap: 8px; }
 .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
-.legend-item:hover { background: #f5f7fa; }
-.legend-item.active { background: #e7f3ee; color: #1f6f54; font-weight: 600; }
+.legend-item:hover { background: #f4f7f1; }
+.legend-item.active { background: #e7f3ee; color: #23704a; font-weight: 600; }
 .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 </style>

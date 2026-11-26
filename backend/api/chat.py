@@ -35,6 +35,7 @@ class ChatRequest(BaseModel):
     session_id: int | None = None
     question: str = ""
     image_urls: list[str] = []  # 用户上传的图片 URL 列表（如 /uploads/xxx.jpg），最多 MAX_CHAT_IMAGES 张
+    batch_no: str | None = None  # 可选：来自批次详情页，用于注入该场区天气
 
 
 @router.post("/chat/upload-image")
@@ -75,7 +76,32 @@ def _load_history(db: OrmSession, session_id: int, current_msg_id: int) -> list[
     return history
 
 
-async def _stream_answer(question: str, image_urls: list[str], session_id: int, db: OrmSession) -> AsyncGenerator[str, None]:
+def _weather_context(db: OrmSession, question: str, batch_no: str | None) -> str:
+    """解析问诊应使用的场区天气：优先批次场区，其次从问题中识别城市/场名。"""
+    from core.weather import resolve_location_by_text, weather_context_text
+    from db.models import TraceBatch
+
+    farm_name = None
+    location = None
+    if batch_no:
+        batch = db.scalar(select(TraceBatch).where(TraceBatch.batch_no == batch_no))
+        if batch:
+            farm_name = batch.farm_name
+    if not farm_name:
+        location = resolve_location_by_text(question)
+        if not location:
+            return ""
+        farm_name = location["city"]
+    return weather_context_text(farm_name, location=location)
+
+
+async def _stream_answer(
+    question: str,
+    image_urls: list[str],
+    session_id: int,
+    db: OrmSession,
+    batch_no: str | None = None,
+) -> AsyncGenerator[str, None]:
     # 保存用户消息
     user_msg = Message(session_id=session_id, role="user", content=question)
     db.add(user_msg)
@@ -111,9 +137,19 @@ async def _stream_answer(question: str, image_urls: list[str], session_id: int, 
     from agent.graph import detect_emergency
     is_emergency = detect_emergency("\n".join([question, *image_descs]))
 
+    # 天气联动：批次场区或问题里提到的场区，自动带上今日与未来 3 天风险
+    try:
+        weather_text = await anyio.to_thread.run_sync(
+            lambda: _weather_context(db, question, batch_no)
+        )
+    except Exception:  # noqa: BLE001 —— 天气失败不影响问答
+        weather_text = ""
+
     # 阶段一：理解 + 检索（同步阻塞，放线程池）
     try:
-        state = await anyio.to_thread.run_sync(prepare, enriched_question, history)
+        state = await anyio.to_thread.run_sync(
+            prepare, enriched_question, history, weather_text
+        )
     except Exception as e:
         db.rollback()
         yield f"data: {json.dumps({'type': 'error', 'message': f'检索失败：{e}'}, ensure_ascii=False)}\n\n"
@@ -175,7 +211,7 @@ async def chat_stream(req: ChatRequest, db: OrmSession = Depends(get_db)):
         session_id = session.id
 
     return StreamingResponse(
-        _stream_answer(req.question, req.image_urls, session_id, db),
+        _stream_answer(req.question, req.image_urls, session_id, db, req.batch_no),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

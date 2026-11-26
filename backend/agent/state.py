@@ -12,6 +12,7 @@ class AgentState(TypedDict, total=False):
     rewritten_queries: list[str]   # Query 理解 Agent 改写后的多路召回 Query
     retrieval_results: list[dict]  # 检索 Agent 的召回结果（向量 + 图谱）
     graph_context: str             # 图谱子图上下文文本（阶段 3，可空）
+    weather_context: str           # 场区天气与风险文本（天气联动，可空）
     answer: str                    # 生成 Agent 的最终答案
     sources: list[dict]            # 溯源 Agent 标注的知识来源
     loop_count: int                # 评估循环次数（≤ EVAL_MAX_LOOPS）

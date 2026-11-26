@@ -46,6 +46,13 @@ export const api = {
       request.get('/graph/search', { params: { keyword, limit } }),
     full: (type = '') => request.get('/graph/full', { params: { type } })
   },
+  // ---- 天气预警 ----
+  weather: {
+    // 各场区今日天气 + 未来 3 天风险概览
+    farms: () => request.get('/weather/farms'),
+    // 单场区 7 天天气、逐日风险与防控建议
+    detail: (farmName) => request.get('/weather/detail', { params: { farm_name: farmName } })
+  },
   // ---- 全链路溯源 ----
   traceability: {
     // 概览：批次/存栏/销售/告警/平均完整度/今日巡栏进度

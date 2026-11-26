@@ -186,6 +186,7 @@ function askBatch() {
     path: '/m/chat',
     query: {
       new: '1',
+      batch: batch.value.batch_no,
       q: `${batch.value.batch_no}（${batch.value.breed || '鹅'}，${batch.value.age_days} 日龄，存栏 ${batch.value.current_quantity} 羽）最近有异常，帮我判断可能是什么病、需要做哪些检查？`
     }
   })

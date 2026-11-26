@@ -95,7 +95,7 @@ const form = reactive({
 const statusMeta = (value) => statusMap[value] || { label: value || '未知', type: 'info' }
 const riskMeta = (value) => riskMap[value] || { label: value || '未知', type: 'info' }
 const progressColor = (value) =>
-  value >= 90 ? '#1f6f54' : value >= 60 ? '#409eff' : '#e6a23c'
+  value >= 90 ? '#23704a' : value >= 60 ? '#409eff' : '#e6a23c'
 
 const filteredBatches = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
@@ -362,21 +362,21 @@ onMounted(async () => {
 <template>
   <div class="trace-page">
     <el-row :gutter="12" class="stat-row">
-      <el-col :xs="12" :sm="4">
+      <el-col :xs="12" :sm="8" :xl="4">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">在养批次</div>
           <div class="stat-value">{{ overview?.raising_count ?? '—' }}</div>
           <div class="stat-tip">含待出栏批次</div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="4">
+      <el-col :xs="12" :sm="8" :xl="4">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">当前存栏</div>
           <div class="stat-value">{{ formatNumber(overview?.alive_quantity) }}</div>
           <div class="stat-tip">羽</div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="4">
+      <el-col :xs="12" :sm="8" :xl="4">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">今日已巡栏</div>
           <div class="stat-value">
@@ -390,7 +390,7 @@ onMounted(async () => {
           </div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="4">
+      <el-col :xs="12" :sm="8" :xl="4">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">今日死淘</div>
           <div class="stat-value">{{ overview?.today_mortality ?? 0 }}<span class="unit">羽</span></div>
@@ -400,14 +400,14 @@ onMounted(async () => {
           </div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="4">
+      <el-col :xs="12" :sm="8" :xl="4">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">已销售批次</div>
           <div class="stat-value">{{ overview?.sold_count ?? '—' }}</div>
           <div class="stat-tip">已完成终端去向登记</div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="4">
+      <el-col :xs="12" :sm="8" :xl="4">
         <el-card shadow="never" class="stat-card">
           <div class="stat-label">平均链路完整度</div>
           <div class="stat-value">{{ overview?.avg_completeness ?? '—' }}<span class="unit">%</span></div>
@@ -925,7 +925,7 @@ onMounted(async () => {
 .stat-row { margin-bottom: 12px; }
 .stat-card { border-radius: 10px; }
 .stat-label { color: #909399; font-size: 13px; }
-.stat-value { font-size: 28px; font-weight: 700; color: #1f6f54; line-height: 1.3; }
+.stat-value { font-size: 28px; font-weight: 700; color: #23704a; line-height: 1.3; }
 .stat-value .unit { font-size: 14px; margin-left: 2px; }
 .stat-tip { color: #b1b3b8; font-size: 12px; margin-top: 2px; }
 
@@ -947,7 +947,7 @@ onMounted(async () => {
   padding-right: 2px;
 }
 .batch-item {
-  border: 1px solid #e4e7ed;
+  border: 1px solid #dde5da;
   border-radius: 10px;
   padding: 12px;
   cursor: pointer;
@@ -959,7 +959,7 @@ onMounted(async () => {
   box-shadow: 0 2px 10px rgba(31, 111, 84, 0.08);
 }
 .batch-item.active {
-  border-color: #1f6f54;
+  border-color: #23704a;
   background: #f2f8f5;
   box-shadow: 0 2px 10px rgba(31, 111, 84, 0.12);
 }
@@ -974,7 +974,7 @@ onMounted(async () => {
   color: #606266;
   margin-bottom: 8px;
 }
-.batch-stats b { color: #1f6f54; }
+.batch-stats b { color: #23704a; }
 .risk.low { color: #67c23a; }
 .risk.medium { color: #e6a23c; }
 .risk.high { color: #f56c6c; }
@@ -992,10 +992,10 @@ onMounted(async () => {
   align-items: center;
   gap: 16px;
   padding: 4px 0 16px;
-  border-bottom: 1px dashed #e4e7ed;
+  border-bottom: 1px dashed #dde5da;
 }
 .hero-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.hero-no { font-size: 20px; font-weight: 700; color: #1f6f54; letter-spacing: 0.5px; }
+.hero-no { font-size: 20px; font-weight: 700; color: #23704a; letter-spacing: 0.5px; }
 .hero-sub { color: #606266; margin-top: 6px; }
 .hero-code { color: #909399; font-size: 13px; margin-top: 6px; }
 .hero-code b { color: #303133; font-family: Consolas, monospace; }
@@ -1007,7 +1007,7 @@ onMounted(async () => {
   color: #303133;
   margin: 20px 0 12px;
   padding-left: 8px;
-  border-left: 3px solid #1f6f54;
+  border-left: 3px solid #23704a;
 }
 .stage-chain {
   display: flex;
@@ -1028,7 +1028,7 @@ onMounted(async () => {
   left: 50%;
   width: 100%;
   height: 2px;
-  background: #e4e7ed;
+  background: #dde5da;
   z-index: 0;
 }
 .stage-node.last::after { display: none; }
@@ -1052,7 +1052,7 @@ onMounted(async () => {
 .stage-node.current .stage-dot { color: #fff; }
 .stage-node.current .stage-dot,
 .stage-node.is-current .stage-dot { box-shadow: 0 0 0 4px rgba(31, 111, 84, 0.15); }
-.stage-now { display: inline-block; margin-left: 3px; padding: 0 4px; border-radius: 8px; background: #e7f3ee; color: #1f6f54; font-size: 10px; line-height: 16px; vertical-align: 1px; }
+.stage-now { display: inline-block; margin-left: 3px; padding: 0 4px; border-radius: 8px; background: #e7f3ee; color: #23704a; font-size: 10px; line-height: 16px; vertical-align: 1px; }
 .stage-name { font-size: 13px; color: #606266; }
 .stage-node.done .stage-name,
 .stage-node.current .stage-name { color: #303133; font-weight: 600; }
@@ -1092,7 +1092,7 @@ onMounted(async () => {
 .detail-key { color: #909399; margin-right: 8px; }
 .event-evidence { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .muted { color: #b1b3b8; }
-.progress-value { font-size: 22px; font-weight: 700; color: #1f6f54; }
+.progress-value { font-size: 22px; font-weight: 700; color: #23704a; }
 .progress-value span { font-size: 12px; }
 .progress-label { font-size: 12px; color: #909399; }
 
@@ -1109,7 +1109,7 @@ onMounted(async () => {
   margin-top: 8px;
   font-size: 12px;
 }
-.record-flag.ok { color: #1f6f54; }
+.record-flag.ok { color: #23704a; }
 .record-flag.todo { color: #e6a23c; }
 .record-flag .muted { margin-left: 6px; }
 .section-note { font-size: 12px; font-weight: 400; color: #b1b3b8; margin-left: 8px; }

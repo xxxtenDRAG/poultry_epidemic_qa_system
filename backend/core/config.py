@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     HISTORY_MAX_TURNS: int = 5
     HISTORY_MAX_CHARS: int = 2000
 
+    # ---- 天气预警 ----
+    # 数据源：auto（Open-Meteo → 中国天气网 → 演示数据）/ open-meteo / itboy / demo
+    WEATHER_PROVIDER: str = "auto"
+    # 天气缓存秒数（30 分钟）
+    WEATHER_CACHE_TTL: int = 1800
+    # Open-Meteo 超时秒数（国内网络常不可达，超时后自动降级）
+    WEATHER_TIMEOUT: float = 6.0
+
     # ---- 阶段 3：知识图谱 + 评估循环 ----
     # 图谱数据文件路径；留空则用默认 <项目根>/data/knowledge_graph.json
     GRAPH_DATA_PATH: str = ""
