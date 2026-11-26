@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Refresh } from '@element-plus/icons-vue'
 import { api } from '../api'
+import MobileTabBar from '../components/MobileTabBar.vue'
 import mascot from '../assets/goose-mascot.png'
 
 const overview = ref(null)
@@ -14,6 +15,7 @@ const detailLoading = ref(false)
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const quickSubmitting = ref('')
 const selected = ref(null)
 const form = reactive({
   record_date: new Date(),
@@ -30,6 +32,8 @@ const form = reactive({
 
 const detailRecords = computed(() => detail.value?.daily_records || [])
 const statusLabel = (b) => (b.today_recorded ? '今日已记' : '今日待记')
+const statusText = { raising: '在养', growing: '在养', processing: '待出栏', sold: '已售出' }
+const isRaising = (b) => b.status === 'raising' || b.status === 'growing'
 
 function fmt(value) {
   if (value === null || value === undefined) return '—'
@@ -136,6 +140,40 @@ async function submit() {
   }
 }
 
+async function markNormal(batch) {
+  if (batch.today_recorded || quickSubmitting.value) return
+  try {
+    await ElMessageBox.confirm(
+      `${batch.batch_no} 今日无死淘、无异常？将记录一条 0 死淘巡栏。`,
+      '一键正常巡栏',
+      { type: 'info', confirmButtonText: '确认记录' }
+    )
+  } catch {
+    return
+  }
+  quickSubmitting.value = batch.batch_no
+  try {
+    await api.traceability.addDailyRecord(batch.batch_no, {
+      record_date: new Date(),
+      mortality: 0,
+      culling: 0,
+      feed_kg: 0,
+      water_l: 0,
+      symptoms: '',
+      action: '手机端一键巡栏：无异常',
+      note: '快速巡栏，未填写采食/饮水',
+      created_by: ''
+    })
+    ElMessage.success('今日巡栏已记录')
+    await load()
+    if (activeNo.value === batch.batch_no) await loadDetail(batch.batch_no)
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || '记录失败')
+  } finally {
+    quickSubmitting.value = ''
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -166,8 +204,8 @@ onMounted(load)
     </div>
 
     <div class="m-links">
-      <el-button type="primary" round @click="$router.push('/chat')">问诊小鹅</el-button>
-      <el-button round plain @click="$router.push('/trace')">全链路溯源</el-button>
+      <el-button type="primary" round @click="$router.push('/m/chat')">问诊小鹅</el-button>
+      <el-button round plain @click="$router.push('/m/trace')">全链路溯源</el-button>
     </div>
 
     <div class="m-list">
@@ -182,12 +220,27 @@ onMounted(load)
         <div class="m-card-nums">
           <span>日龄 <b>{{ b.age_days }}</b> 天</span>
           <span>存栏 <b>{{ fmt(b.current_quantity) }}</b> 羽</span>
-          <span :class="['m-flag', b.today_recorded ? 'ok' : 'todo']">{{ statusLabel(b) }}</span>
+          <span v-if="isRaising(b)" :class="['m-flag', b.today_recorded ? 'ok' : 'todo']">
+            {{ statusLabel(b) }}
+          </span>
+          <span v-else class="m-flag muted">{{ statusText[b.status] || b.status }}</span>
         </div>
         <div class="m-card-actions">
-          <el-button size="small" type="primary" :icon="Calendar" @click="openRecord(b)">
-            记一笔
-          </el-button>
+          <template v-if="isRaising(b)">
+            <el-button size="small" type="primary" :icon="Calendar" @click="openRecord(b)">
+              记一笔
+            </el-button>
+            <el-button
+              v-if="!b.today_recorded"
+              size="small"
+              type="success"
+              plain
+              :loading="quickSubmitting === b.batch_no"
+              @click="markNormal(b)"
+            >
+              今日正常
+            </el-button>
+          </template>
           <el-button size="small" text @click="toggle(b)">
             {{ activeNo === b.batch_no ? '收起' : '最近记录' }}
           </el-button>
@@ -210,6 +263,8 @@ onMounted(load)
       </div>
       <el-empty v-if="!batches.length" description="还没有批次，请先在电脑端建档" :image-size="70" />
     </div>
+
+    <MobileTabBar />
 
     <el-dialog
       v-model="dialogVisible"
@@ -282,7 +337,7 @@ onMounted(load)
   overflow-x: hidden;
   margin: 0 auto;
   min-height: 100vh;
-  padding: 14px 14px 28px;
+  padding: 14px 14px 78px;
   background: #f3f7f4;
   box-sizing: border-box;
 }
@@ -308,6 +363,7 @@ onMounted(load)
 .m-flag { margin-left: auto; }
 .m-flag.ok { color: #1f6f54; }
 .m-flag.todo { color: #e6a23c; }
+.m-flag.muted { color: #909399; }
 .m-card-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
 .m-recent { margin-top: 10px; border-top: 1px dashed #e8ecea; padding-top: 8px; }
 .m-rec { padding: 6px 0; border-bottom: 1px dashed #f0f3f1; font-size: 12px; color: #606266; }

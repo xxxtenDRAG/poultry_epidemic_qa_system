@@ -7,7 +7,7 @@ import historyIcon from './assets/08-session-history.png'
 </script>
 
 <template>
-  <router-view v-if="$route.path === '/m'" />
+  <router-view v-if="$route.path.startsWith('/m')" />
   <el-container v-else class="layout">
     <el-header class="header">
       <img :src="brandIcon" class="header-icon" alt="小鹅助手" />
