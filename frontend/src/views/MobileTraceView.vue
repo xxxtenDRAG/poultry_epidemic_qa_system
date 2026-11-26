@@ -1,9 +1,12 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { Connection, Plus, Refresh, Search, WarningFilled } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
 import { api } from '../api'
 import MobileTabBar from '../components/MobileTabBar.vue'
+
+const route = useRoute()
 
 const overview = ref(null)
 const batches = ref([])
@@ -12,6 +15,8 @@ const activeNo = ref('')
 const detail = ref(null)
 const detailLoading = ref(false)
 const stageOptions = ref([])
+const keyword = ref('')
+const filter = ref('all')
 
 const eventVisible = ref(false)
 const submitting = ref(false)
@@ -28,7 +33,27 @@ const eventForm = reactive({
 
 const statusText = { raising: '在养', growing: '在养', processing: '待出栏', sold: '已售出' }
 const riskText = { low: '低风险', medium: '中风险', high: '高风险' }
-const riskType = { low: 'success', medium: 'warning', high: 'danger' }
+const filters = [
+  { key: 'all', label: '全部' },
+  { key: 'raising', label: '在养' },
+  { key: 'processing', label: '待出栏' },
+  { key: 'sold', label: '已售出' }
+]
+
+const visibleBatches = computed(() => {
+  const key = keyword.value.trim().toLowerCase()
+  return batches.value.filter((b) => {
+    if (filter.value === 'raising' && !['raising', 'growing'].includes(b.status)) return false
+    if (filter.value === 'processing' && b.status !== 'processing') return false
+    if (filter.value === 'sold' && b.status !== 'sold') return false
+    if (!key) return true
+    return [b.batch_no, b.farm_name, b.breed, b.current_stage_name]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(key))
+  })
+})
+
+const completeness = computed(() => overview.value?.avg_completeness || 0)
 
 function fmt(v) {
   if (v === null || v === undefined) return '—'
@@ -37,6 +62,10 @@ function fmt(v) {
 
 function shortTime(value) {
   return value ? String(value).slice(0, 10) : '—'
+}
+
+function doneSegments(batch) {
+  return (batch.stages || []).filter((s) => s.status === 'done').length
 }
 
 async function load() {
@@ -127,110 +156,191 @@ onMounted(async () => {
     stageOptions.value = []
   }
   await load()
+
+  const target = String(route.query.batch || '')
+  if (target) {
+    const targetBatch = batches.value.find((b) => b.batch_no === target)
+    if (targetBatch) {
+      activeNo.value = target
+      await loadDetail(target)
+      if (String(route.query.event) === '1') openEvent(targetBatch)
+      await nextTick()
+      setTimeout(() => {
+        document.getElementById(`batch-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 120)
+    }
+  }
 })
 </script>
 
 <template>
-  <div class="mt-page" v-loading="loading">
-    <header class="mt-head">
-      <div class="mt-title">
-        <h1>全链路溯源</h1>
-        <p>孵化 · 育雏 · 生长 · 防疫 · 出栏 · 屠宰 · 质检 · 冷链 · 销售</p>
-      </div>
-      <el-button circle :icon="Refresh" @click="load" />
-    </header>
+  <div class="mobile-app tr-page" v-loading="loading">
+    <div class="mobile-page">
+      <header class="tr-head">
+        <div>
+          <p class="m-eyebrow">CHAIN OF CUSTODY</p>
+          <h1 class="m-page-title">全链路溯源</h1>
+          <p class="m-page-sub">孵化 · 育雏 · 生长 · 防疫 · 出栏 · 屠宰 · 质检 · 冷链 · 销售</p>
+        </div>
+        <button type="button" class="m-icon-btn" @click="load">
+          <el-icon><Refresh /></el-icon>
+        </button>
+      </header>
 
-    <div class="mt-stats">
-      <div class="mt-stat">
-        <b>{{ overview?.batch_count ?? '—' }}</b>
-        <span>批次总数</span>
-      </div>
-      <div class="mt-stat">
-        <b>{{ fmt(overview?.alive_quantity) }}</b>
-        <span>在养存栏</span>
-      </div>
-      <div class="mt-stat">
-        <b>{{ overview?.avg_completeness ?? 0 }}%</b>
-        <span>链路完整度</span>
-      </div>
-    </div>
-
-    <div class="mt-list">
-      <div v-for="b in batches" :key="b.batch_no" class="mt-card">
-        <div class="mt-card-top">
-          <span class="no">{{ b.batch_no }}</span>
-          <el-tag size="small" :type="riskType[b.risk_level] || 'info'" effect="plain">
-            {{ riskText[b.risk_level] || b.risk_level }}
-          </el-tag>
-        </div>
-        <div class="mt-card-sub">{{ b.breed || '—' }} · {{ b.farm_name }}</div>
-        <div class="mt-card-nums">
-          <span>日龄 <b>{{ b.age_days }}</b> 天</span>
-          <span>存栏 <b>{{ fmt(b.current_quantity) }}</b> 羽</span>
-          <span class="mt-flag">{{ statusText[b.status] || b.status }}</span>
-        </div>
-        <div class="mt-progress">
-          <div class="mt-progress-bar">
-            <i :style="{ width: (b.completeness || 0) + '%' }" />
-          </div>
-          <span>{{ b.completeness || 0 }}%</span>
-        </div>
-        <div class="mt-card-actions">
-          <span class="mt-stage">当前：{{ b.current_stage_name || '—' }}</span>
-          <div class="mt-actions-right">
-            <el-button size="small" type="primary" plain @click="openEvent(b)">登记事件</el-button>
-            <el-button size="small" text @click="toggle(b)">
-              {{ activeNo === b.batch_no ? '收起' : '查看链路' }}
-            </el-button>
+      <section class="tr-hero m-card">
+        <div class="tr-hero-body">
+          <p class="m-eyebrow">TRACEABILITY SCORE</p>
+          <h2>从孵化到餐桌</h2>
+          <p>把每个环节的证据补齐，批次才经得起追问。</p>
+          <div class="tr-hero-chips">
+            <span><b>{{ overview?.batch_count ?? 0 }}</b> 批次</span>
+            <span><b>{{ overview?.alive_quantity ? fmt(overview.alive_quantity) : 0 }}</b> 在养</span>
+            <span><b>{{ overview?.alert_count ?? 0 }}</b> 告警</span>
           </div>
         </div>
+        <div class="tr-ring" :style="{ background: `conic-gradient(#7ac99a ${completeness * 3.6}deg, #e7efe6 0deg)` }">
+          <div class="tr-ring-in">
+            <b>{{ completeness }}%</b>
+            <span>平均完整度</span>
+          </div>
+        </div>
+      </section>
 
-        <div v-if="activeNo === b.batch_no" class="mt-detail" v-loading="detailLoading">
-          <div class="mt-stages">
-            <div
-              v-for="s in detail?.batch?.stages || []"
-              :key="s.key"
-              class="mt-stage-chip"
-              :class="{ done: s.status === 'done' }"
-            >
-              <i :style="{ background: s.color }" />
-              <span>{{ s.short }}</span>
-              <em v-if="s.last_time">{{ shortTime(s.last_time) }}</em>
+      <div class="tr-stats m-card">
+        <div><b>{{ overview?.sold_count ?? 0 }}</b><span>已售批次</span></div>
+        <div><b>{{ overview?.processing_count ?? 0 }}</b><span>待出栏</span></div>
+        <div><b>{{ overview?.raising_count ?? 0 }}</b><span>在养批次</span></div>
+      </div>
+
+      <section class="m-section">
+        <div class="m-section-head">
+          <h2>批次链路</h2>
+          <span>{{ visibleBatches.length }} / {{ batches.length }}</span>
+        </div>
+
+        <label class="m-search">
+          <el-icon><Search /></el-icon>
+          <input v-model="keyword" type="search" placeholder="搜索批次号、养殖场或品种" />
+        </label>
+
+        <div class="m-chip-row tr-filters">
+          <button
+            v-for="item in filters"
+            :key="item.key"
+            type="button"
+            class="m-chip"
+            :class="{ active: filter === item.key }"
+            @click="filter = item.key"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+
+        <div class="tr-list">
+          <article
+            v-for="b in visibleBatches"
+            :id="`batch-${b.batch_no}`"
+            :key="b.batch_no"
+            class="tr-card m-card"
+          >
+            <div class="tr-card-top">
+              <div class="tr-id">
+                <span class="no">{{ b.batch_no }}</span>
+                <span class="meta">{{ b.breed || '—' }} · {{ b.farm_name }}</span>
+              </div>
+              <span class="m-pill" :class="b.risk_level">{{ riskText[b.risk_level] || b.risk_level }}</span>
             </div>
-          </div>
 
-          <div class="mt-recent">
-            <div class="mt-recent-head">
-              <span>最近巡栏</span>
-              <button type="button" class="mt-recent-link" @click="$router.push('/m')">
-                去登记 →
-              </button>
+            <div class="tr-metrics">
+              <span>日龄 <b>{{ b.age_days }}</b></span>
+              <span>存栏 <b>{{ fmt(b.current_quantity) }}</b></span>
+              <span class="state">{{ statusText[b.status] || b.status }}</span>
             </div>
-            <div v-for="r in (detail?.daily_records || []).slice(0, 3)" :key="r.id" class="mt-rec">
-              <span class="d">{{ shortTime(r.record_date) }}</span>
-              <span>死淘 {{ r.mortality + r.culling }}</span>
-              <span>采食 {{ r.feed_kg }}kg</span>
-              <span v-if="r.temperature !== null">{{ r.temperature }}℃</span>
-            </div>
-            <div v-if="!(detail?.daily_records || []).length" class="mt-empty">暂无巡栏记录</div>
-          </div>
 
-          <div class="mt-events">
-            <div v-for="e in detail?.events || []" :key="e.id" class="mt-event">
-              <i class="dot" :style="{ background: e.stage_color }" />
-              <div class="mt-event-body">
-                <div class="mt-event-title">{{ e.title }}</div>
-                <div class="mt-event-meta">
-                  {{ e.stage_short }} · {{ shortTime(e.event_time) }} · {{ e.operator || '—' }}
-                </div>
+            <div class="tr-chain">
+              <div class="tr-chain-head">
+                <span>当前 · {{ b.current_stage_name || '—' }}</span>
+                <b>{{ b.completeness || 0 }}%</b>
+              </div>
+              <div class="tr-segments">
+                <i
+                  v-for="s in b.stages || []"
+                  :key="s.key"
+                  :class="{ done: s.status === 'done' }"
+                  :style="{ background: s.status === 'done' ? s.color : undefined }"
+                />
+              </div>
+              <div class="tr-chain-foot">
+                <span>九环节完成 {{ doneSegments(b) }}/{{ (b.stages || []).length || 9 }}</span>
+                <span>追溯码 {{ b.trace_code || '—' }}</span>
               </div>
             </div>
-            <div v-if="!(detail?.events || []).length" class="mt-empty">暂无追溯事件</div>
+
+            <div v-if="b.alerts?.length" class="tr-alert">
+              <el-icon><WarningFilled /></el-icon>
+              <span>{{ b.alerts[0].text }}</span>
+            </div>
+
+            <div class="tr-actions">
+              <button type="button" class="m-btn soft" @click="openEvent(b)">
+                <el-icon><Plus /></el-icon> 登记事件
+              </button>
+              <button type="button" class="m-btn primary" @click="toggle(b)">
+                {{ activeNo === b.batch_no ? '收起链路' : '查看链路' }}
+              </button>
+            </div>
+
+            <div v-if="activeNo === b.batch_no" class="tr-detail" v-loading="detailLoading">
+              <div class="tr-stages">
+                <div
+                  v-for="s in detail?.batch?.stages || []"
+                  :key="s.key"
+                  class="tr-stage-chip"
+                  :class="{ done: s.status === 'done' }"
+                >
+                  <i :style="{ background: s.color }" />
+                  <span>{{ s.short }}</span>
+                  <em v-if="s.last_time">{{ shortTime(s.last_time) }}</em>
+                </div>
+              </div>
+
+              <div class="tr-recent">
+                <div class="tr-recent-head">
+                  <span>最近巡栏</span>
+                  <button type="button" @click="$router.push('/m/batch/' + encodeURIComponent(b.batch_no))">
+                    批次详情 →
+                  </button>
+                </div>
+                <div v-for="r in (detail?.daily_records || []).slice(0, 3)" :key="r.id" class="tr-rec">
+                  <span class="d">{{ shortTime(r.record_date).slice(5) }}</span>
+                  <span>死淘 {{ r.mortality + r.culling }}</span>
+                  <span>采食 {{ r.feed_kg }}kg</span>
+                  <span v-if="r.temperature !== null">{{ r.temperature }}℃</span>
+                </div>
+                <div v-if="!(detail?.daily_records || []).length" class="m-empty">暂无巡栏记录</div>
+              </div>
+
+              <div class="tr-events">
+                <div class="tr-events-head">追溯事件</div>
+                <div v-for="e in detail?.events || []" :key="e.id" class="tr-event">
+                  <i class="dot" :style="{ background: e.stage_color }" />
+                  <div class="tr-event-body">
+                    <div class="tr-event-title">{{ e.title }}</div>
+                    <div class="tr-event-meta">
+                      {{ e.stage_short }} · {{ shortTime(e.event_time) }} · {{ e.operator || '—' }}
+                    </div>
+                  </div>
+                </div>
+                <div v-if="!(detail?.events || []).length" class="m-empty">暂无追溯事件</div>
+              </div>
+            </div>
+          </article>
+
+          <div v-if="!visibleBatches.length" class="m-empty m-card">
+            没有匹配的批次，换个关键词或筛选条件。
           </div>
         </div>
-      </div>
-
-      <el-empty v-if="!batches.length" description="还没有批次" :image-size="70" />
+      </section>
     </div>
 
     <el-dialog
@@ -238,8 +348,9 @@ onMounted(async () => {
       :title="`登记追溯事件 · ${eventBatchNo}`"
       width="92%"
       align-center
+      class="mobile-dialog"
     >
-      <el-form :model="eventForm" label-position="top" class="mt-form">
+      <el-form :model="eventForm" label-position="top" class="m-form">
         <el-row :gutter="10">
           <el-col :span="12">
             <el-form-item label="环节">
@@ -270,20 +381,10 @@ onMounted(async () => {
           </el-col>
         </el-row>
         <el-form-item label="说明">
-          <el-input
-            v-model="eventForm.note"
-            type="textarea"
-            :rows="2"
-            placeholder="关键指标、处置措施或验收结论"
-          />
+          <el-input v-model="eventForm.note" type="textarea" :rows="2" placeholder="关键指标、处置措施或验收结论" />
         </el-form-item>
         <el-form-item label="佐证材料">
-          <el-input
-            v-model="eventForm.evidence"
-            type="textarea"
-            :rows="2"
-            placeholder="每行一条，如：检疫合格证 GDSY-2026-10231"
-          />
+          <el-input v-model="eventForm.evidence" type="textarea" :rows="2" placeholder="每行一条，如：检疫合格证 GDSY-2026-10231" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -297,67 +398,61 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.mt-page {
-  width: 100%;
-  max-width: 560px;
-  margin: 0 auto;
-  min-height: 100vh;
-  padding: 14px 14px 78px;
-  background: #f3f7f4;
-  box-sizing: border-box;
-}
-.mt-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.mt-title { flex: 1; min-width: 0; }
-.mt-title h1 { margin: 0; font-size: 18px; color: #1f6f54; }
-.mt-title p { margin: 2px 0 0; font-size: 11px; color: #8a938e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mt-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
-.mt-stat { background: #fff; border-radius: 12px; padding: 10px 8px; text-align: center; box-shadow: 0 1px 6px rgba(31, 111, 84, 0.06); }
-.mt-stat b { display: block; font-size: 19px; color: #1f6f54; }
-.mt-stat span { font-size: 11px; color: #909399; }
-.mt-list { display: flex; flex-direction: column; gap: 10px; }
-.mt-card { background: #fff; border-radius: 14px; padding: 12px; box-shadow: 0 1px 8px rgba(31, 111, 84, 0.07); }
-.mt-card-top { display: flex; align-items: center; justify-content: space-between; }
-.mt-card-top .no { font-weight: 700; font-size: 14px; color: #303133; }
-.mt-card-sub { font-size: 12px; color: #7d8580; margin: 4px 0 8px; }
-.mt-card-nums { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #606266; }
-.mt-card-nums b { color: #303133; }
-.mt-flag { margin-left: auto; color: #1f6f54; }
-.mt-progress { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 11px; color: #909399; }
-.mt-progress-bar { flex: 1; height: 6px; border-radius: 3px; background: #eef2ef; overflow: hidden; }
-.mt-progress-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #67c23a, #1f6f54); }
-.mt-card-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
-.mt-actions-right { display: flex; align-items: center; gap: 4px; }
-.mt-stage { font-size: 12px; color: #606266; }
-.mt-detail { margin-top: 10px; border-top: 1px dashed #e8ecea; padding-top: 10px; }
-.mt-stages { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
-.mt-stage-chip {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 52px;
-  padding: 6px 4px;
-  border-radius: 10px;
-  background: #f7faf8;
-  border: 1px solid #eef2ef;
-  font-size: 11px;
-  color: #a8abb2;
-}
-.mt-stage-chip.done { color: #1f6f54; background: #eef7f2; border-color: #d8ece1; }
-.mt-stage-chip i { width: 8px; height: 8px; border-radius: 50%; opacity: 0.35; }
-.mt-stage-chip.done i { opacity: 1; }
-.mt-stage-chip em { font-style: normal; font-size: 10px; color: #b1b3b8; }
-.mt-recent { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: #f7faf8; }
-.mt-recent-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #1f6f54; font-weight: 600; }
-.mt-recent-link { padding: 2px 0; border: none; background: transparent; color: #1f6f54; font-size: 12px; }
-.mt-rec { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-size: 11px; color: #606266; }
-.mt-rec .d { color: #1f6f54; font-weight: 600; }
-.mt-events { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
-.mt-event { display: flex; gap: 8px; }
-.mt-event .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
-.mt-event-title { font-size: 13px; color: #303133; }
-.mt-event-meta { font-size: 11px; color: #909399; margin-top: 2px; }
-.mt-empty { text-align: center; color: #b1b3b8; font-size: 12px; padding: 8px 0; }
-.mt-form :deep(.el-form-item) { margin-bottom: 12px; }
+.tr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 4px 2px 16px; }
+.tr-hero { display: flex; align-items: center; gap: 12px; padding: 17px; background: linear-gradient(145deg, #f8fbf4, #eef5ea); }
+.tr-hero-body { flex: 1; min-width: 0; }
+.tr-hero-body h2 { margin: 5px 0 0; font-size: 20px; letter-spacing: -0.02em; }
+.tr-hero-body p { margin: 5px 0 0; font-size: 11px; line-height: 1.55; color: var(--m-muted); }
+.tr-hero-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.tr-hero-chips span { padding: 3px 7px; border-radius: 7px; background: rgba(255, 255, 255, 0.78); font-size: 9px; color: var(--m-muted); }
+.tr-hero-chips b { color: var(--m-green); font-size: 11px; }
+.tr-ring { flex: 0 0 auto; display: grid; place-items: center; width: 88px; height: 88px; border-radius: 50%; }
+.tr-ring-in { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 70px; height: 70px; border-radius: 50%; background: #f8fbf4; }
+.tr-ring-in b { font-size: 17px; color: var(--m-green); line-height: 1; }
+.tr-ring-in span { margin-top: 3px; font-size: 8px; color: var(--m-muted); }
+.tr-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 10px; padding: 11px 6px; }
+.tr-stats div { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tr-stats div + div { border-left: 1px solid var(--m-line); }
+.tr-stats b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.tr-stats span { font-size: 9px; color: var(--m-muted); }
+.tr-filters { margin: 9px 0 12px; }
+.tr-list { display: flex; flex-direction: column; gap: 12px; }
+.tr-card { padding: 15px; }
+.tr-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; }
+.tr-id { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tr-id .no { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+.tr-id .meta { font-size: 11px; color: var(--m-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 11px; font-size: 10px; color: var(--m-muted); }
+.tr-metrics b { color: var(--m-ink); font-size: 12px; }
+.tr-metrics .state { margin-left: auto; color: var(--m-green); font-weight: 600; }
+.tr-chain { margin-top: 11px; }
+.tr-chain-head { display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--m-muted); }
+.tr-chain-head b { color: var(--m-green); font-size: 11px; }
+.tr-segments { display: flex; gap: 3px; margin-top: 6px; }
+.tr-segments i { flex: 1; height: 5px; border-radius: 99px; background: #e7eee5; }
+.tr-chain-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 5px; font-size: 8px; color: #9aa69e; }
+.tr-alert { display: flex; align-items: flex-start; gap: 6px; margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: var(--m-amber-soft); color: var(--m-amber); font-size: 9px; line-height: 1.55; }
+.tr-alert .el-icon { margin-top: 1px; flex: 0 0 auto; }
+.tr-actions { display: flex; gap: 7px; margin-top: 12px; }
+.tr-actions .m-btn { flex: 1; height: 33px; font-size: 11px; }
+.tr-actions .el-icon { margin-right: 2px; vertical-align: -2px; }
+.tr-detail { margin-top: 13px; padding-top: 13px; border-top: 1px dashed var(--m-line); }
+.tr-stages { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.tr-stages::-webkit-scrollbar { display: none; }
+.tr-stage-chip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; padding: 7px 4px; border-radius: 10px; background: var(--m-surface-2); color: #9aa69e; font-size: 9px; }
+.tr-stage-chip.done { background: var(--m-green-soft); color: var(--m-green); }
+.tr-stage-chip i { width: 7px; height: 7px; border-radius: 50%; opacity: 0.35; }
+.tr-stage-chip.done i { opacity: 1; }
+.tr-stage-chip em { font-style: normal; font-size: 8px; color: #9aa69e; }
+.tr-recent { margin-top: 10px; padding: 10px; border-radius: 12px; background: var(--m-surface-2); }
+.tr-recent-head { display: flex; align-items: center; justify-content: space-between; font-size: 10px; font-weight: 600; color: var(--m-green); }
+.tr-recent-head button { padding: 0; border: 0; background: transparent; color: var(--m-green); font-size: 9px; }
+.tr-rec { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; font-size: 9px; color: var(--m-muted); }
+.tr-rec .d { color: var(--m-green); font-weight: 600; }
+.tr-events { margin-top: 11px; }
+.tr-events-head { margin-bottom: 5px; font-size: 10px; font-weight: 600; color: var(--m-ink); }
+.tr-event { display: flex; gap: 8px; padding: 5px 0; }
+.tr-event .dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; flex: 0 0 auto; }
+.tr-event-title { font-size: 11px; }
+.tr-event-meta { margin-top: 1px; font-size: 8px; color: var(--m-muted); }
 </style>

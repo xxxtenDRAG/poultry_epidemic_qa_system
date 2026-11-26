@@ -13,58 +13,85 @@ const tabs = [
   { path: '/m/history', label: '历史', icon: Clock }
 ]
 
-const activePath = computed(() => route.path)
+const activePath = computed(() => (route.path.startsWith('/m/batch') ? '/m' : route.path))
 </script>
 
 <template>
-  <nav class="mtb">
-    <button
-      v-for="t in tabs"
-      :key="t.path"
-      type="button"
-      class="mtb-item"
-      :class="{ active: activePath === t.path }"
-      @click="router.push(t.path)"
-    >
-      <el-icon :size="20"><component :is="t.icon" /></el-icon>
-      <span>{{ t.label }}</span>
-    </button>
+  <nav class="mtb-wrap">
+    <div class="mtb">
+      <button
+        v-for="t in tabs"
+        :key="t.path"
+        type="button"
+        class="mtb-item"
+        :class="{ active: activePath === t.path }"
+        @click="router.push(t.path)"
+      >
+        <span class="mtb-ico"><el-icon :size="19"><component :is="t.icon" /></el-icon></span>
+        <span class="mtb-label">{{ t.label }}</span>
+        <i v-if="activePath === t.path" class="mtb-dot" />
+      </button>
+    </div>
   </nav>
 </template>
 
 <style scoped>
-.mtb {
+.mtb-wrap {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 20;
+  z-index: 30;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0 14px calc(10px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+.mtb {
   display: flex;
   align-items: stretch;
-  width: 100%;
-  max-width: 560px;
-  margin: 0 auto;
-  padding-bottom: env(safe-area-inset-bottom);
-  background: #fff;
-  border-top: 1px solid #e8ecea;
-  box-shadow: 0 -2px 10px rgba(31, 111, 84, 0.06);
+  height: 64px;
+  padding: 6px;
+  border: 1px solid rgba(221, 229, 218, 0.9);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 38px rgba(28, 53, 34, 0.16);
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
 }
 .mtb-item {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  height: 56px;
+  gap: 3px;
   padding: 0;
-  border: none;
+  border: 0;
+  border-radius: 16px;
   background: transparent;
-  color: #909399;
-  font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
+  color: #8b978f;
+  transition: background 0.18s ease, color 0.18s ease;
 }
-.mtb-item.active { color: #1f6f54; font-weight: 600; }
+.mtb-ico {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 9px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.mtb-label { font-size: 10px; line-height: 1; }
+.mtb-item.active { color: #23704a; }
+.mtb-item.active .mtb-ico { background: #e1f2e6; }
+.mtb-dot {
+  position: absolute;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #23704a;
+}
 </style>
